@@ -1,4 +1,4 @@
-# NES Emulator (Rust)
+# RustiNESs
 
 A simple Nintendo Entertainment System (NES) emulator written in **Rust**, built for learning and experimentation.
 
