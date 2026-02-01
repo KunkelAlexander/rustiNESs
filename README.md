@@ -7,39 +7,43 @@ This project aims to incrementally emulate the original NES hardware, starting w
 
 ## Devlog
 
-- 01.02.2026
-    - Watch [NES Emulator Part #1: Bitwise Basics & Overview](https://www.youtube.com/watch?v=F8kx56OZQhg)
-    - Watch [NES Emulator Part #2: The CPU (6502 Implementation)](https://www.youtube.com/watch?v=8XmxKPJDGU0)
+### Day 1: 01.02.2026
+- Watch [NES Emulator Part #1: Bitwise Basics & Overview](https://www.youtube.com/watch?v=F8kx56OZQhg)
+- Watch [NES Emulator Part #2: The CPU (6502 Implementation)](https://www.youtube.com/watch?v=8XmxKPJDGU0)
 
 ![](figures/1.png)
-    - A CPU in isolation does nothing
-    - CPU (6502) needs to be conntected to a BUS
+
+- A CPU in isolation does nothing
+- CPU (6502) needs to be conntected to a BUS
 
 ![](figures/2.png)
 
-    - Address and data lines of the CPU are connected to the CPU 
-    - CPU sets address of the BUS - other devices need to react 
-    - BUS has a 16-bit address space from 0x0000 to 0xFFFF
-    - Every device gets assigned an address range on the BUS 
-    - In our system: 64 kB of RAM containing variables as well as the program itself
-    - The CPU extracts bytes from the RAM in order to execute them 
-    - We need a CPU, a BUS and a RAM
+- Address and data lines of the CPU are connected to the CPU 
+- CPU sets address of the BUS - other devices need to react 
+- BUS has a 16-bit address space from 0x0000 to 0xFFFF
+- Every device gets assigned an address range on the BUS 
+- In our system: 64 kB of RAM containing variables as well as the program itself
+- The CPU extracts bytes from the RAM in order to execute them 
+- We need a CPU, a BUS and a RAM
 
 
 ![](figures/3.png)
 
-    - 16 address bits: A0-A15
-    - 8 data bits: D0-D7
+- 16 address bits: A0-A15
+- 8 data bits: D0-D7
 
 
 ![](figures/4.png)
-    - Not all instructions are the same length
-    - Different instructions need different numbers of clock cycles to execute
-    - 56 legal instructions
-    - First byte of the instruction 
+
+- Not all instructions are the same length
+- Different instructions need different numbers of clock cycles to execute
+- 56 legal instructions
+- First byte of the instruction 
 
 ![](figures/5.png)
-    - 
+
+- The Op codes of the different instructions
+
 
 ## Goals
 
