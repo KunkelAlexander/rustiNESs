@@ -94,10 +94,47 @@ impl Olc6502 {
     fn xxx(&mut self, _bus: &mut Bus) -> u8 { 0 }
 
     // add data fetched from memory to accumulator, including the carry bit
-    fn adc(&mut self, _bus: &mut Bus) -> u8 { 
-        0
+    // A += M + C
+    // A = 250
+    // M = 10 - answer is 4 + carry bit
+    // We can carry out 16-bit addition despite only working with 8-bit numbers by taking two 8-bit variables together
+    // This way we can work with arbitrarily high-precision numbers
+    // But signed numbers are a different story
+    // 1000100 = 128 + 4 = 132 (0-255) 
+    // 132 -> -124 (-128-127, overflow) 
+    // Sign = first bit
+    // 10000100 = 132 or -124
+    //+00010001 =  17 or   17
+    // ______________________
+    // 10010101 = 149 or -107
+    // P + P = P
+    // P + P = N - Overflow
+    // P + N = Cant overflow
+    // N + N = N
+    // N + N = P - Overflow
+    // V register = Was there an overflow? 
+    // In the below: most significant bits (0 = positive, 1 = negative)
+    // A M R = V
+    // 0 0 0   0 
+    // 0 0 1   1
+    // 0 1 0   0
+    // 0 1 1   0
+    // 1 0 0   0
+    // 1 0 1   0 
+    // 1 1 0   1
+    // 1 1 1   0
+    fn adc(&mut self, bus: &mut Bus) -> u8 { 
+        self.fetch(bus);
+        let temp: u16 = self.a as u16 + self.fetched as u16 + self.get_flag(FLAG6502_C) as u16; 
+        self.set_flag(FLAG6502_C, temp > 255);
+        self.set_flag(FLAG6502_Z, (temp & 0x00FF) == 0); // 
+        self.set_flag(FLAG6502_N, (temp & 0x80) == 0);   // Check the most significant bit
+        self.set_flag(FLAG6502_B,  (!((self.a as u16) ^ (self.fetched as u16)) & ((self.a as u16) ^ (temp as u16)) & 0x0080) != 0);
+
+        self.a = (temp & 0x00FF) as u8; 
+        1 // can require an additional clock cycle
     }
-    
+
     fn and(&mut self, bus: &mut Bus) -> u8 { 
         self.fetch(bus);
         self.a = self.a & self.fetched; 
@@ -209,15 +246,57 @@ impl Olc6502 {
     fn lsr(&mut self, _bus: &mut Bus) -> u8 { 0 }
     fn nop(&mut self, _bus: &mut Bus) -> u8 { 0 }
     fn ora(&mut self, _bus: &mut Bus) -> u8 { 0 }
-    fn pha(&mut self, _bus: &mut Bus) -> u8 { 0 }
+    // Push accumulator to the stack
+    // 0x0100 is hard-coded stack-location
+    fn pha(&mut self, bus: &mut Bus) -> u8 {
+        self.write(bus, (0x0100 as u16) + (self.stkp as u16), self.a);
+        self.stkp -= 1;
+        0
+    }
     fn php(&mut self, _bus: &mut Bus) -> u8 { 0 }
-    fn pla(&mut self, _bus: &mut Bus) -> u8 { 0 }
+    // Pop from stack
+    // 0x0100 is hard-coded stack-location
+    fn pla(&mut self, bus: &mut Bus) -> u8 { 
+        self.stkp += 1; 
+        self.a = self.read(bus, (0x0100 as u16) + (self.stkp as u16));
+        self.set_flag(FLAG6502_Z, self.a == 0x00); 
+        self.set_flag(FLAG6502_N, self.a & 0x80 != 0); 
+        0
+    }
     fn plp(&mut self, _bus: &mut Bus) -> u8 { 0 }
     fn rol(&mut self, _bus: &mut Bus) -> u8 { 0 }
     fn ror(&mut self, _bus: &mut Bus) -> u8 { 0 }
-    fn rti(&mut self, _bus: &mut Bus) -> u8 { 0 }
+    fn rti(&mut self, bus: &mut Bus) -> u8 { 
+        self.stkp += 1; 
+        self.status = self.read(bus, (0x0100 as u16) + (self.stkp as u16));
+        self.status &= !FLAG6502_B;
+        self.status &= !FLAG6502_U;
+        self.stkp += 1; 
+        
+        self.pc    = self.read(bus, (0x0100 as u16) + (self.stkp as u16)) as u16;
+        self.stkp += 1; 
+        self.pc   |= (self.read(bus, (0x0100 as u16) + (self.stkp as u16)) as u16) << 8;
+        self.stkp += 1; 
+        0
+    }
     fn rts(&mut self, _bus: &mut Bus) -> u8 { 0 }
-    fn sbc(&mut self, _bus: &mut Bus) -> u8 { 0 }
+    // Subtraction = A = A - M - (1 - C)
+    // A = A + -M + 1 + c
+    // 5 = 00000101
+    //-5 = 11111010 + 00000001
+    // implement like addition
+    fn sbc(&mut self, bus: &mut Bus) -> u8 {
+        self.fetch(bus);
+        let value : u16 = (self.fetched as u16) ^ 0x00FF;
+        let temp: u16 = self.a as u16 + self.fetched as u16 + self.get_flag(FLAG6502_C) as u16; 
+        self.set_flag(FLAG6502_C, temp > 255);
+        self.set_flag(FLAG6502_Z, (temp & 0x00FF) == 0); // 
+        self.set_flag(FLAG6502_N, (temp & 0x80) == 0);   // Check the most significant bit
+        self.set_flag(FLAG6502_B,  (!((self.a as u16) ^ (self.fetched as u16)) & ((self.a as u16) ^ (temp as u16)) & 0x0080) != 0);
+
+        self.a = (temp & 0x00FF) as u8; 
+        1 // can require an additional clock cycle
+    }
     fn sec(&mut self, _bus: &mut Bus) -> u8 { 0 }
     fn sed(&mut self, _bus: &mut Bus) -> u8 { 0 }
     fn sei(&mut self, _bus: &mut Bus) -> u8 { 0 }
@@ -400,9 +479,23 @@ impl Olc6502 {
      }
 
 
-    
-    pub fn reset(&mut self, _bus: &mut Bus) {
-        self.pc = 0x8000;
+    // configure CPU into a known state
+    pub fn reset(&mut self, bus: &mut Bus) {
+        self.a  = 0; 
+        self.x  = 0;
+        self.y  = 0; 
+        self.stkp = 0xFD; 
+        self.status = 0x00 | FLAG6502_U;
+
+        self.addr_abs = 0xFFFC;
+        let lo: u16 = self.read(bus,self.addr_abs + 0) as u16;
+        let hi: u16 = self.read(bus,self.addr_abs + 1) as u16;
+        self.addr_rel = 0x0000;
+        self.addr_abs = 0x0000;
+        self.fetched  = 0x00;
+        
+        self.cycles = 8;
+
     }
 
     pub fn clock(&mut self, bus: &mut Bus) {
@@ -426,8 +519,33 @@ impl Olc6502 {
         
     }
 
-    pub fn irq() {}
-    pub fn nmi() {}
+    pub fn irq(&mut self, bus: &mut Bus) {
+        if self.get_flag(FLAG6502_I) != 0 {
+            self.nmi(bus);
+        }
+    }
+
+    pub fn nmi(&mut self, bus: &mut Bus) {
+        self.write(bus, 0x0100 + self.stkp as u16, ((self.pc >> 8) & 0x00FF) as u8);
+        self.stkp -= 1; 
+        self.write(bus, 0x0100 + self.stkp as u16, ((self.pc     ) & 0x00FF) as u8);
+        self.stkp -= 1; 
+
+        self.set_flag(FLAG6502_B, false);
+        self.set_flag(FLAG6502_U, true);
+        self.set_flag(FLAG6502_I, true);
+
+        self.write(bus, 0x0100 + self.stkp as u16, self.status);
+        self.stkp -= 1; 
+
+        self.addr_abs = 0xFFFE;
+        let lo: u16 = self.read(bus,self.addr_abs + 0) as u16;
+        let hi: u16 = self.read(bus,self.addr_abs + 1) as u16;
+        self.pc = (hi << 8) | lo; 
+        
+        self.cycles = 7;
+    }
+
 
     pub fn fetch(&mut self, bus: &mut Bus) -> u8 {
         let inst = self.lookup[self.opcode as usize];
