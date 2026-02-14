@@ -38,11 +38,30 @@ This project aims to incrementally emulate the original NES hardware, starting w
 - Not all instructions are the same length
 - Different instructions need different numbers of clock cycles to execute
 - 56 legal instructions
-- First byte of the instruction 
+- First byte of the instruction provides us with the length and the duration of the instruction
 
 ![](figures/5.png)
 
-- The Op codes of the different instructions
+- The above tables shows the Op Codes of the different instructions
+- LDA $41 - we load immediate data and this is a 2-byte instruction
+- LDA $0105 - load from memory address and this is a 3-byte instruction
+- CLC - 1-byte instruction
+- For a given instruction, we need to *emulate its function, its address mode and the number of cycles*
+
+![](figures/6.png)
+
+- We can refer to the instructions using a 16x16-table index by 4+4 bits = 1 byte. 
+- The first byte read can be used to index the table
+- Suppose we index LDA, IMM, 2, 2 - load the accumulator from an immediate data centers, it's a 2-byte instruction (left number) and takes 2 cycles (right number) 
+- The blank spaces refer to illegal Op Codes - the CPU will do things but they may be unexpected
+
+- Sequence of events
+    - 1) Read byte @ PC
+    - 2) The Op Code derived from the byte gives addressing mode and number of cycles
+    - 3) Read 0, 1, or 2 more bytes
+    - 4) Execute
+    - 5) Wait, count cycles, complete
+
 
 
 ## Goals
