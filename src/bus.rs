@@ -1,8 +1,5 @@
-use crate::cpu::Olc6502;
-
 pub struct Bus {
     ram: [u8; 1024*64],
-    pub cpu: Olc6502
 }
 
 impl Bus {
@@ -10,7 +7,6 @@ impl Bus {
     pub fn new() -> Self {
         Self {
             ram: [0u8; 1024*64],
-            cpu: Olc6502::new(),
         }
     }
 
