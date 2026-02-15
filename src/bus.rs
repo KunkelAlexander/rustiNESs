@@ -23,5 +23,12 @@ impl Bus {
         }
         
     }
+
+    pub fn get_ram(&self, start: u16, len: usize) -> Vec<u8> {
+        let start = start as usize;
+        let end = start + len;
+
+        self.ram[start..end].to_vec()
+    }
 }
 

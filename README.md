@@ -4,7 +4,6 @@ A simple Nintendo Entertainment System (NES) emulator written in **Rust**, built
 
 This project aims to incrementally emulate the original NES hardware, starting with the **6502 CPU** and gradually adding the PPU, APU, cartridge mappers, and input devices.
 
-
 ## Devlog
 
 ### Day 1: 01.02.2026
@@ -63,6 +62,11 @@ This project aims to incrementally emulate the original NES hardware, starting w
     - 5) Wait, count cycles, complete
 
 
+### Day 2: 14.02.2026
+
+- Learn Rust from ChatGPT
+- Implement more instructions
+- Add Web GUI for debugging 6502 emulator
 
 ## Goals
 
@@ -106,6 +110,9 @@ Registers:
 - SP (Stack Pointer)
 - P (Status Flags)
 
+
+## Building
+wasm-pack build --target web --out-dir docs/pkg
 
 ## Current Status
 
