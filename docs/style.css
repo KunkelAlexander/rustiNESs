@@ -204,24 +204,43 @@ input[type="number"] {
 
 .ram {
   display: grid;
-  grid-template-columns: repeat(16, minmax(0, 1fr));
-  gap: 6px;
+  grid-template-columns: 56px repeat(16, 28px);
+  gap: 4px;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 11px;
+  align-items: center;
 }
 
 .ram .cell {
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 6px;
+  border-radius: 7px;
+  padding: 4px 0;
   text-align: center;
   background: #fafafa;
   color: var(--text);
   transition: background 0.15s ease;
+  line-height: 1;
+}
+
+.ram .row-label {
+  grid-column: 1;
+  font-weight: 600;
+  background: #f2f2f2;
+  color: var(--muted);
 }
 
 .ram .cell:hover {
   background: #f0f0f2;
+}
+
+.ram .cell.pc-highlight {
+  background: rgba(0, 113, 227, 0.18);
+  border: 1px solid #0071e3;
+}
+
+.ram .cell.addr-highlight {
+  background: rgba(255, 204, 0, 0.3);
+  border: 1px solid #ffcc00;
 }
 
 /* ---------- Hints ---------- */

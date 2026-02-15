@@ -38,25 +38,64 @@ function renderRegisters() {
   const [fetched, addr_abs, addr_rel, opcode, cycles] = s;
 
   $("fetched").innerText = fetched.toString(16).padStart(2, "0").toUpperCase();
-  $("addr_abs").innerText = addr_abs.toString(16).padStart(2, "0").toUpperCase();
-  $("addr_rel").innerText = addr_rel.toString(16).padStart(2, "0").toUpperCase();
+  $("addr_abs").innerText = addr_abs.toString(16).padStart(4, "0").toUpperCase();
+  $("addr_rel").innerText = addr_rel.toString(16).padStart(4, "0").toUpperCase();
   $("opcode").innerText = opcode.toString(16).padStart(2, "0").toUpperCase();
-  $("cycles").innerText = cycles.toString(16).padStart(4, "0").toUpperCase();
+  $("cycles").innerText = cycles.toString(16).padStart(2, "0").toUpperCase();
 }
-
 function renderRam() {
-  const grid = $("ramGrid");
-  const ram = emu.get_ram(0, 1024*64);
+  if (!emu) return;
 
+  const grid = $("ramGrid");
   grid.innerHTML = "";
 
-  for (let i = 0; i < 256; i++) {
-    const cell = document.createElement("div");
-    cell.className = "cell";
-    cell.innerText = ram[i].toString(16).padStart(2, "0").toUpperCase();
-    grid.appendChild(cell);
+  const ram = emu.get_ram(0, 0x10000);
+
+  const [a, x, y, sp, pc, status] = emu.get_registers();
+  const [fetched, addr_abs, addr_rel, opcode, cycles] = emu.get_cpu_state();
+
+
+
+  function renderBlock(startAddr) {
+    for (let row = 0; row < 16; row++) {
+      const base = startAddr + row * 16;
+
+      // Row label
+      const label = document.createElement("div");
+      label.className = "cell row-label";
+      label.innerText = base.toString(16).padStart(4, "0").toUpperCase();
+      grid.appendChild(label);
+
+      for (let col = 0; col < 16; col++) {
+        const addr = base + col;
+
+        const cell = document.createElement("div");
+        cell.className = "cell";
+        cell.innerText = ram[addr]
+          .toString(16)
+          .padStart(2, "0")
+          .toUpperCase();
+
+        // 🔵 Highlight PC
+        if (addr === pc) {
+          cell.classList.add("pc-highlight");
+        }
+
+        // 🟡 Highlight effective address
+        if (addr === addr_abs) {
+          cell.classList.add("addr-highlight");
+        }
+
+        grid.appendChild(cell);
+      }
+    }
   }
+
+  renderBlock(0x0000);
+  renderBlock(0x8000);
 }
+
+
 
 function updateUI() {
   renderRegisters();
