@@ -945,17 +945,125 @@ impl Olc6502 {
     // Instruction: Compare Accumulator
     // Function:    C <- A >= M      Z <- (A - M) == 0
     // Flags Out:   N, C, Z
-    fn cmp(&mut self, _bus: &mut Bus) -> u8 { 0 }
-    fn cpx(&mut self, _bus: &mut Bus) -> u8 { 0 }
-    fn cpy(&mut self, _bus: &mut Bus) -> u8 { 0 }
-    fn dec(&mut self, _bus: &mut Bus) -> u8 { 0 }
-    fn dex(&mut self, _bus: &mut Bus) -> u8 { 0 }
-    fn dey(&mut self, _bus: &mut Bus) -> u8 { 0 }
-    fn eor(&mut self, _bus: &mut Bus) -> u8 { 0 }
-    fn inc(&mut self, _bus: &mut Bus) -> u8 { 0 }
-    fn inx(&mut self, _bus: &mut Bus) -> u8 { 0 }
-    fn iny(&mut self, _bus: &mut Bus) -> u8 { 0 }
-    fn jmp(&mut self, _bus: &mut Bus) -> u8 { 0 }
+    fn cmp(&mut self, bus: &mut Bus) -> u8 { 
+        self.fetch(bus);
+        let temp: u16 = (self.a as u16) - (self.fetched  as u16); 
+        self.set_flag(FLAG6502_C, self.a >= self.fetched);
+        self.set_flag(FLAG6502_Z, (temp & 0x00FF) == 0x0000);
+        self.set_flag(FLAG6502_N, temp & 0x0080 != 0);
+        1
+     }
+
+    // Instruction: Compare X Register
+    // Function:    C <- X >= M      Z <- (X - M) == 0
+    // Flags Out:   N, C, Z
+    fn cpx(&mut self, bus: &mut Bus) -> u8 { 
+        self.fetch(bus);
+        let temp: u16 = (self.x as u16) - (self.fetched  as u16); 
+        self.set_flag(FLAG6502_C, self.x >= self.fetched);
+        self.set_flag(FLAG6502_Z, (temp & 0x00FF) == 0x0000);
+        self.set_flag(FLAG6502_N, temp & 0x0080 != 0);
+        1
+
+    }
+
+    
+    // Instruction: Compare Y Register
+    // Function:    C <- Y >= M      Z <- (Y - M) == 0
+    // Flags Out:   N, C, Z
+    fn cpy(&mut self, bus: &mut Bus) -> u8 { 
+        self.fetch(bus);
+        let temp: u16 = (self.y as u16) - (self.fetched  as u16); 
+        self.set_flag(FLAG6502_C, self.y >= self.fetched);
+        self.set_flag(FLAG6502_Z, (temp & 0x00FF) == 0x0000);
+        self.set_flag(FLAG6502_N, temp & 0x0080 != 0);
+        1
+     }
+
+    // Instruction: Bitwise Logic XOR
+    // Function:    A = A xor M
+    // Flags Out:   N, Z
+    fn eor(&mut self, bus: &mut Bus) -> u8 { 
+        self.fetch(bus);
+        self.a = self.a ^ self.fetched; 
+        self.set_flag(FLAG6502_Z, self.a        == 0x00);
+        self.set_flag(FLAG6502_N, self.a & 0x80 != 0x00);
+        1
+    }
+     
+    // Instruction: Decrement Value at Memory Location
+    // Function:    M = M - 1
+    // Flags Out:   N, Z
+    fn dec(&mut self, bus: &mut Bus) -> u8 { 
+        self.fetch(bus);
+        let temp: u8 = self.fetched.wrapping_sub(1);
+        self.write(bus, self.addr_abs, temp);
+        self.set_flag(FLAG6502_Z, temp        == 0x00);
+        self.set_flag(FLAG6502_N, temp & 0x80 != 0x00);
+        0
+    }
+
+    // Instruction: Decrement X Register
+    // Function:    X = X - 1
+    // Flags Out:   N, Z
+    fn dex(&mut self, bus: &mut Bus) -> u8 { 
+        self.x = self.x.wrapping_sub(1);
+        self.set_flag(FLAG6502_Z, self.x        == 0x00);
+        self.set_flag(FLAG6502_N, self.x & 0x80 != 0x00);
+        0
+    }
+    
+    // Instruction: Decrement Y Register
+    // Function:    Y = Y - 1
+    // Flags Out:   N, Z
+    fn dey(&mut self, bus: &mut Bus) -> u8 { 
+        self.y = self.y.wrapping_sub(1);
+        self.set_flag(FLAG6502_Z, self.y        == 0x00);
+        self.set_flag(FLAG6502_N, self.y & 0x80 != 0x00);
+        0
+    }
+
+    // Instruction: Increment Value at Memory Location
+    // Function:    M = M + 1
+    // Flags Out:   N, Z
+    fn inc(&mut self, bus: &mut Bus) -> u8 { 
+        self.fetch(bus);
+        let temp: u8 = self.fetched.wrapping_add(1);
+        self.write(bus, self.addr_abs, temp);
+        self.set_flag(FLAG6502_Z, temp        == 0x00);
+        self.set_flag(FLAG6502_N, temp & 0x80 != 0x00);
+        0 
+    }
+
+
+    // Instruction: Increment X Register
+    // Function:    X = X + 1
+    // Flags Out:   N, Z
+    fn inx(&mut self, bus: &mut Bus) -> u8 { 
+        self.x = self.x.wrapping_add(1);
+        self.set_flag(FLAG6502_Z, self.x        == 0x00);
+        self.set_flag(FLAG6502_N, self.x & 0x80 != 0x00);
+        0
+    }
+
+    // Instruction: Increment Y Register
+    // Function:    Y = Y + 1
+    // Flags Out:   N, Z
+    fn iny(&mut self, bus: &mut Bus) -> u8 { 
+        self.y = self.y.wrapping_add(1);
+        self.set_flag(FLAG6502_Z, self.y        == 0x00);
+        self.set_flag(FLAG6502_N, self.y & 0x80 != 0x00);
+        0
+    }
+
+    
+    // Instruction: Jump To Location
+    // Function:    pc = address
+    fn jmp(&mut self, _bus: &mut Bus) -> u8 { 
+        self.pc = self.addr_abs;
+        0
+    }
+    
     fn jsr(&mut self, _bus: &mut Bus) -> u8 { 0 }
     fn lda(&mut self, _bus: &mut Bus) -> u8 { 0 }
     fn ldx(&mut self, _bus: &mut Bus) -> u8 { 0 }
