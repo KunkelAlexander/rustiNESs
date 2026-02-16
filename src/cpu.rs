@@ -244,19 +244,19 @@ impl Olc6502 {
     }
 
 
-
+    // Each instruction requires a variable number of clock cycles to execute.
+    // In my emulation, I only care about the final result and so I perform
+    // the entire computation in one hit. In hardware, each clock cycle would
+    // perform "microcode" style transformations of the CPUs state.
+    //
+    // To remain compliant with connected devices, it's important that the 
+    // emulation also takes "time" in order to execute instructions, so I
+    // implement that delay by simply counting down the cycles required by 
+    // the instruction. When it reaches 0, the instruction is complete, and
+    // the next one is ready to be executed.
     pub fn clock(&mut self, bus: &mut Bus) {
     
-        // Each instruction requires a variable number of clock cycles to execute.
-        // In my emulation, I only care about the final result and so I perform
-        // the entire computation in one hit. In hardware, each clock cycle would
-        // perform "microcode" style transformations of the CPUs state.
-        //
-        // To remain compliant with connected devices, it's important that the 
-        // emulation also takes "time" in order to execute instructions, so I
-        // implement that delay by simply counting down the cycles required by 
-        // the instruction. When it reaches 0, the instruction is complete, and
-        // the next one is ready to be executed.
+        // Only actually do work once enough time has passed
         if self.cycles == 0 {
             // Read one byte from bus containing the opcode
             self.opcode = bus.read(self.pc, true);
@@ -354,7 +354,7 @@ impl Olc6502 {
         self.addr_abs  = self.read(bus, self.pc) as u16;
         self.addr_abs  = self.addr_abs.wrapping_add(self.x as u16);
         self.pc        = self.pc.wrapping_add(1);
-        self.addr_abs &= 0x00FF; // Clear upper bits if addr_abs is not within range
+        self.addr_abs &= 0x00FF; // Clear upper bits in case addr_abs not within range
         0
     }
      // Zero-page offset with y-register addressing
@@ -362,7 +362,7 @@ impl Olc6502 {
         self.addr_abs  = self.read(bus, self.pc) as u16;
         self.addr_abs  = self.addr_abs.wrapping_add(self.y as u16);
         self.pc        = self.pc.wrapping_add(1);
-        self.addr_abs &= 0x00FF; // Clear upper
+        self.addr_abs &= 0x00FF; // Clear upper bits in case addr_abs not within range
         0
     }
 
@@ -712,6 +712,7 @@ impl Olc6502 {
     }
 
 
+    // This function captures illegal opcodes
     fn xxx(&mut self, _bus: &mut Bus) -> u8 { 0 }
 
     // add data fetched from memory to accumulator, including the carry bit
@@ -787,6 +788,50 @@ impl Olc6502 {
         0
      }
 
+     
+
+    // A & memory
+    // BIT modifies flags, but does not change memory or registers. The zero flag is set depending on the result of the accumulator AND memory value, effectively applying a bitmask and then checking if any bits are set. Bits 7 and 6 of the memory value are loaded directly into the negative and overflow flags, allowing them to be easily checked without having to load a mask into A.
+    // Because BIT only changes CPU flags, it is sometimes used to trigger the read side effects of a hardware register without clobbering any CPU registers, or even to waste cycles as a 3-cycle NOP. As an advanced trick, it is occasionally used to hide a 1- or 2-byte instruction in its operand that is only executed if jumped to directly, allowing two code paths to be interleaved. However, because the instruction in the operand is treated as an address from which to read, this carries risk of triggering side effects if it reads a hardware register. This trick can be useful when working under tight constraints on space, time, or register usage. 
+    fn bit(&mut self, bus: &mut Bus) -> u8 { 
+        self.fetch(bus);
+        let temp: u16 = (self.a & self.fetched) as u16; 
+        self.set_flag(FLAG6502_Z, (temp & 0xFF00) == 0x00);
+        self.set_flag(FLAG6502_N, self.fetched & (1 << 7) > 0);
+        self.set_flag(FLAG6502_V, self.fetched & (1 << 6) > 0);
+        0
+    }
+
+    
+    // Trigger an interrupt request in software
+    // Push current program counter and process flags to the stack
+    // Set interrupt disable flag and jump to IRQ handler
+    fn brk(&mut self, bus: &mut Bus) -> u8 {
+        
+        self.pc = self.pc.wrapping_add(1);
+        self.write(bus, 0x0100 + self.stkp as u16, ((self.pc >> 8) & 0x00FF) as u8);
+        self.stkp -= 1; 
+        self.write(bus, 0x0100 + self.stkp as u16, ((self.pc     ) & 0x00FF) as u8);
+        self.stkp -= 1; 
+
+        self.set_flag(FLAG6502_B, true);
+        self.set_flag(FLAG6502_I, true);
+
+        self.write(bus, 0x0100 + self.stkp as u16, self.status);
+        self.stkp -= 1; 
+
+        self.set_flag(FLAG6502_B, false);
+
+        self.addr_abs = 0xFFFE;
+        let lo: u16 = self.read(bus,self.addr_abs + 0) as u16;
+        let hi: u16 = self.read(bus,self.addr_abs + 1) as u16;
+        self.pc = (hi << 8) | lo; 
+        
+        0
+     }
+
+    
+
      // helper function to implement branching
      // Consumes 1 or 2 cycles and updates pc to pc + addr_rel
     fn branch(&mut self, bus: &mut Bus) {
@@ -826,15 +871,6 @@ impl Olc6502 {
         }
         0
     }
-    fn bit(&mut self, bus: &mut Bus) -> u8 { 
-        self.fetch(bus);
-        let temp: u16 = (self.a & self.fetched) as u16; 
-        self.set_flag(FLAG6502_C, (temp & 0xFF00) == 0x00);
-        self.set_flag(FLAG6502_Z, self.fetched & (1 << 7) > 0);
-        self.set_flag(FLAG6502_N, self.fetched & (1 << 6) > 0);
-        0
-    }
-    
     // Instruction: Branch if Negative
     // Function:    if(N == 1) pc = address
     fn bmi(&mut self, bus: &mut Bus) -> u8 { 
@@ -859,25 +895,56 @@ impl Olc6502 {
         }
         0
     }
-    fn brk(&mut self, _bus: &mut Bus) -> u8 { 0 }
-    fn bvc(&mut self, _bus: &mut Bus) -> u8 { 0 }
-    fn bvs(&mut self, _bus: &mut Bus) -> u8 { 0 }
+
+    // Branch if overflow clear - set pc to pc + addr_rel
+    fn bvc(&mut self, bus: &mut Bus) -> u8 { 
+        if self.get_flag(FLAG6502_V) == 0 {
+            self.branch(bus);
+        }
+        0
+    }
+    // Branch if overflow set - set pc to pc + addr_rel
+    fn bvs(&mut self, bus: &mut Bus) -> u8 { 
+        if self.get_flag(FLAG6502_V) == 1 {
+            self.branch(bus);
+        }
+        0
+     }
+
+    // Instruction: Clear Carry Flag
+    // Function:    C = 0
     fn clc(&mut self, _bus: &mut Bus) -> u8 {
         self.set_flag(FLAG6502_C, false);
         0
     }
+    
+    // Instruction: Clear Decimal Flag
+    // Function:    D = 0
     fn cld(&mut self, _bus: &mut Bus) -> u8 {
         self.set_flag(FLAG6502_D, false);
         0
     }
+
+    
+    // Instruction: Disable Interrupts / Clear Interrupt Flag
+    // Function:    I = 0
     fn cli(&mut self, _bus: &mut Bus) -> u8 {
         self.set_flag(FLAG6502_I, false);
         0
     }
+
+        
+    // Instruction: Clear Overflow Flag
+    // Function:    V = 0
     fn clv(&mut self, _bus: &mut Bus) -> u8 {
         self.set_flag(FLAG6502_V, false);
         0
     }
+
+    
+    // Instruction: Compare Accumulator
+    // Function:    C <- A >= M      Z <- (A - M) == 0
+    // Flags Out:   N, C, Z
     fn cmp(&mut self, _bus: &mut Bus) -> u8 { 0 }
     fn cpx(&mut self, _bus: &mut Bus) -> u8 { 0 }
     fn cpy(&mut self, _bus: &mut Bus) -> u8 { 0 }
