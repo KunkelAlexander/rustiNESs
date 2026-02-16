@@ -165,9 +165,20 @@ impl Olc6502 {
     pub fn get_registers(&self) -> (u8, u8, u8, u8, u16, u8) {
         (self.a, self.x, self.y, self.stkp, self.pc, self.status)
     }
+    pub fn set_registers(&mut self, a:u8,x:u8,y:u8,s:u8,pc:u16,p:u8) {
+        (self.a, self.x, self.y, self.stkp, self.pc, self.status) = (a, x, y, s, pc, p);
+    }
 
     pub fn get_state(&self) -> (u8, u16, u16, u8, u8) {
         (self.fetched, self.addr_abs, self.addr_rel, self.opcode, self.cycles)
+    }
+
+    pub fn get_remaining_cycles(&self) -> u8 {
+        self.cycles
+    }
+
+    pub fn force_cycles_zero(&mut self) {
+        self.cycles = 0;
     }
 
     ///////////////////////////////////////////////////////////////////////////////
@@ -1193,7 +1204,7 @@ impl Olc6502 {
 
     fn rol(&mut self, bus: &mut Bus) -> u8 { 
         self.fetch(bus);
-        let temp = ((self.fetched as u16) << 1 ) | self.get_flag(FLAG6502_C);
+        let temp = ((self.fetched as u16) << 1 ) | (self.get_flag(FLAG6502_C) as u16);
         self.set_flag(FLAG6502_C,  temp & 0xFF00  != 0x0000);
         self.set_flag(FLAG6502_Z, (temp & 0x00FF) == 0x0000);
         self.set_flag(FLAG6502_N,  temp & 0x0080  != 0x0000);
