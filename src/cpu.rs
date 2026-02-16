@@ -810,15 +810,15 @@ impl Olc6502 {
         
         self.pc = self.pc.wrapping_add(1);
         self.write(bus, 0x0100 + self.stkp as u16, ((self.pc >> 8) & 0x00FF) as u8);
-        self.stkp -= 1; 
+        self.stkp = self.stkp.wrapping_sub(1); 
         self.write(bus, 0x0100 + self.stkp as u16, ((self.pc     ) & 0x00FF) as u8);
-        self.stkp -= 1; 
+        self.stkp = self.stkp.wrapping_sub(1); 
 
         self.set_flag(FLAG6502_B, true);
         self.set_flag(FLAG6502_I, true);
 
         self.write(bus, 0x0100 + self.stkp as u16, self.status);
-        self.stkp -= 1; 
+        self.stkp = self.stkp.wrapping_sub(1); 
 
         self.set_flag(FLAG6502_B, false);
 
@@ -990,6 +990,19 @@ impl Olc6502 {
         self.set_flag(FLAG6502_N, self.a & 0x80 != 0x00);
         1
     }
+
+    
+    // Instruction: Bitwise Logic OR
+    // Function:    A = A | M
+    // Flags Out:   N, Z
+    fn ora(&mut self, bus: &mut Bus) -> u8 { 
+        self.fetch(bus);
+        self.a = self.a | self.fetched; 
+        self.set_flag(FLAG6502_Z, self.a        == 0x00);
+        self.set_flag(FLAG6502_N, self.a & 0x80 != 0x00);
+        1
+    }
+
      
     // Instruction: Decrement Value at Memory Location
     // Function:    M = M - 1
@@ -1063,14 +1076,83 @@ impl Olc6502 {
         self.pc = self.addr_abs;
         0
     }
+        
+    // Instruction: Jump To Sub-Routine
+    // Function:    Push current pc to stack, pc = address
+    fn jsr(&mut self, bus: &mut Bus) -> u8 { 
+        
+        self.pc = self.pc.wrapping_sub(1);
+        self.write(bus, 0x0100 + self.stkp as u16, ((self.pc >> 8) & 0x00FF) as u8);
+        self.stkp = self.stkp.wrapping_sub(1); 
+        self.write(bus, 0x0100 + self.stkp as u16, ((self.pc     ) & 0x00FF) as u8);
+        self.stkp = self.stkp.wrapping_sub(1); 
+
+        self.pc = self.addr_abs; 
+        0
+    }
+
+    // Instruction: Load The Accumulator
+    // Function:    A = M
+    // Flags Out:   N, Z
+    fn lda(&mut self, bus: &mut Bus) -> u8 { 
+        self.fetch(bus);
+        self.a = self.fetched;
+        self.set_flag(FLAG6502_Z, self.a        == 0x00);
+        self.set_flag(FLAG6502_N, self.a & 0x80 != 0x00);
+        1
+     }
     
-    fn jsr(&mut self, _bus: &mut Bus) -> u8 { 0 }
-    fn lda(&mut self, _bus: &mut Bus) -> u8 { 0 }
-    fn ldx(&mut self, _bus: &mut Bus) -> u8 { 0 }
-    fn ldy(&mut self, _bus: &mut Bus) -> u8 { 0 }
-    fn lsr(&mut self, _bus: &mut Bus) -> u8 { 0 }
-    fn nop(&mut self, _bus: &mut Bus) -> u8 { 0 }
-    fn ora(&mut self, _bus: &mut Bus) -> u8 { 0 }
+    // Instruction: Load The X Register
+    // Function:    X = M
+    // Flags Out:   N, Z
+    fn ldx(&mut self, bus: &mut Bus) -> u8 { 
+        self.fetch(bus);
+        self.x = self.fetched;
+        self.set_flag(FLAG6502_Z, self.x        == 0x00);
+        self.set_flag(FLAG6502_N, self.x & 0x80 != 0x00);
+        1
+    }
+
+    
+    // Instruction: Load The Y Register
+    // Function:    Y = M
+    // Flags Out:   N, Z
+    fn ldy(&mut self, bus: &mut Bus) -> u8 { 
+        self.fetch(bus);
+        self.y = self.fetched;
+        self.set_flag(FLAG6502_Z, self.y        == 0x00);
+        self.set_flag(FLAG6502_N, self.y & 0x80 != 0x00);
+        1
+    }
+
+    fn lsr(&mut self, bus: &mut Bus) -> u8 {
+        self.fetch(bus);
+        self.set_flag(FLAG6502_C, self.fetched & 0x01 != 0);
+        let temp : u8 = (self.fetched >> 1) as u8;	
+        self.set_flag(FLAG6502_Z, self.y        == 0x00);
+        self.set_flag(FLAG6502_N, self.y & 0x80 != 0x00);        
+    
+        let inst = self.lookup[self.opcode as usize];
+
+        if inst.addrmode != Olc6502::imp {
+            self.a = temp;
+        } else {
+            self.write(bus, self.addr_abs, temp);
+        }
+
+        return 0;
+
+    }
+
+    // No operation codes based on https://wiki.nesdev.com/w/index.php/CPU_unofficial_opcodes
+    fn nop(&mut self, _bus: &mut Bus) -> u8 { 
+        match self.opcode {
+            0x1C | 0x3C | 0x5C | 0x7C | 0xDC | 0xFC => 1,
+            _ => 0,
+        }
+    }
+
+
     // Push accumulator to the stack
     // 0x0100 is hard-coded stack-location
     fn pha(&mut self, bus: &mut Bus) -> u8 {
@@ -1088,23 +1170,41 @@ impl Olc6502 {
         self.set_flag(FLAG6502_N, self.a & 0x80 != 0); 
         0
     }
-    fn plp(&mut self, _bus: &mut Bus) -> u8 { 0 }
+    
+    // Instruction: Pop Status Register off Stack
+    // Function:    Status <- stack
+    fn plp(&mut self, bus: &mut Bus) -> u8 { 
+        self.stkp = self.stkp.wrapping_add(1); 
+        self.status = self.read(bus, 0x0100 + self.stkp as u16); 
+        self.set_flag(FLAG6502_U, true); 
+        0
+    }
+
     fn rol(&mut self, _bus: &mut Bus) -> u8 { 0 }
     fn ror(&mut self, _bus: &mut Bus) -> u8 { 0 }
     fn rti(&mut self, bus: &mut Bus) -> u8 { 
-        self.stkp += 1; 
+        self.stkp = self.stkp.wrapping_add(1); 
         self.status = self.read(bus, (0x0100 as u16) + (self.stkp as u16));
         self.status &= !FLAG6502_B;
         self.status &= !FLAG6502_U;
-        self.stkp += 1; 
+        self.stkp = self.stkp.wrapping_add(1); 
         
-        self.pc    = self.read(bus, (0x0100 as u16) + (self.stkp as u16)) as u16;
-        self.stkp += 1; 
-        self.pc   |= (self.read(bus, (0x0100 as u16) + (self.stkp as u16)) as u16) << 8;
-        self.stkp += 1; 
+        self.pc    = self.read(bus, 0x0100 + (self.stkp as u16)) as u16;
+        self.stkp = self.stkp.wrapping_add(1); 
+        self.pc   |= (self.read(bus, 0x0100 + (self.stkp as u16)) as u16) << 8;
+        self.stkp = self.stkp.wrapping_add(1); 
         0
     }
-    fn rts(&mut self, _bus: &mut Bus) -> u8 { 0 }
+    fn rts(&mut self, bus: &mut Bus) -> u8 { 
+        
+        self.pc    = self.read(bus, 0x0100 + (self.stkp as u16)) as u16;
+        self.stkp = self.stkp.wrapping_add(1); 
+        self.pc   |= (self.read(bus, 0x0100 + (self.stkp as u16)) as u16) << 8;
+        self.stkp = self.stkp.wrapping_add(1); 
+
+        self.pc += 1;
+        0
+     }
     // Subtraction = A = A - M - (1 - C)
     // A = A + -M + 1 + c
     // 5 = 00000101
@@ -1122,18 +1222,110 @@ impl Olc6502 {
         self.a = (temp & 0x00FF) as u8; 
         1 // can require an additional clock cycle
     }
-    fn sec(&mut self, _bus: &mut Bus) -> u8 { 0 }
-    fn sed(&mut self, _bus: &mut Bus) -> u8 { 0 }
-    fn sei(&mut self, _bus: &mut Bus) -> u8 { 0 }
-    fn sta(&mut self, _bus: &mut Bus) -> u8 { 0 }
-    fn stx(&mut self, _bus: &mut Bus) -> u8 { 0 }
-    fn sty(&mut self, _bus: &mut Bus) -> u8 { 0 }
-    fn tax(&mut self, _bus: &mut Bus) -> u8 { 0 }
-    fn tay(&mut self, _bus: &mut Bus) -> u8 { 0 }
-    fn tsx(&mut self, _bus: &mut Bus) -> u8 { 0 }
-    fn txa(&mut self, _bus: &mut Bus) -> u8 { 0 }
-    fn txs(&mut self, _bus: &mut Bus) -> u8 { 0 }
-    fn tya(&mut self, _bus: &mut Bus) -> u8 { 0 }
+    
+
+    // Instruction: Set Carry Flag
+    // Function:    C = 1
+    fn sec(&mut self, _bus: &mut Bus) -> u8 { 
+        self.set_flag(FLAG6502_C, true);
+        0
+     }
+    
+
+    // Instruction: Set Decimal Flag
+    // Function:    D = 1
+    fn sed(&mut self, _bus: &mut Bus) -> u8 { 
+        self.set_flag(FLAG6502_D, true);
+        0
+    }
+    
+    // Instruction: Set Interrupt Flag / Enable Interrupts
+    // Function:    I = 1
+    fn sei(&mut self, _bus: &mut Bus) -> u8 { 
+        self.set_flag(FLAG6502_I, true);
+        0
+     }
+
+    // Instruction: Store Accumulator at Address
+    // Function:    M = A
+    fn sta(&mut self, bus: &mut Bus) -> u8 { 
+        self.write(bus, self.addr_abs, self.a);
+        0
+     }
+    
+    // Instruction: Store X Register at Address
+    // Function:    M = X
+    fn stx(&mut self, bus: &mut Bus) -> u8 { 
+        self.write(bus, self.addr_abs, self.x);
+        0
+     }
+    
+    // Instruction: Store Y Register at Address
+    // Function:    M = Y
+    fn sty(&mut self, bus: &mut Bus) -> u8 {
+        self.write(bus, self.addr_abs, self.y);
+        0
+     }
+
+
+    // Instruction: Transfer Accumulator to X Register
+    // Function:    X = A
+    // Flags Out:   N, Z
+    fn tax(&mut self, _bus: &mut Bus) -> u8 { 
+        self.x = self.a;
+        self.set_flag(FLAG6502_Z, self.x        == 0x00); 
+        self.set_flag(FLAG6502_N, self.x & 0x80 != 0x00); 
+        0
+    }
+    
+    // Instruction: Transfer Accumulator to Y Register
+    // Function:    Y = A
+    // Flags Out:   N, Z
+    fn tay(&mut self, _bus: &mut Bus) -> u8 {  
+        self.y = self.a;
+        self.set_flag(FLAG6502_Z, self.y        == 0x00); 
+        self.set_flag(FLAG6502_N, self.y & 0x80 != 0x00); 
+        0
+    }
+    
+    // Instruction: Transfer Stack Pointer to X Register
+    // Function:    X = stack pointer
+    // Flags Out:   N, Z
+    fn tsx(&mut self, _bus: &mut Bus) -> u8 { 
+        self.x = self.stkp;
+        self.set_flag(FLAG6502_Z, self.x        == 0x00); 
+        self.set_flag(FLAG6502_N, self.x & 0x80 != 0x00); 
+        0
+     }
+    
+    // Instruction: Transfer X Register to Accumulator
+    // Function:    A = X
+    // Flags Out:   N, Z
+    fn txa(&mut self, _bus: &mut Bus) -> u8 { 
+        self.a = self.x;
+        self.set_flag(FLAG6502_Z, self.a        == 0x00); 
+        self.set_flag(FLAG6502_N, self.a & 0x80 != 0x00); 
+        0
+     }
+
+    
+    // Instruction: Transfer X Register to Stack Pointer
+    // Function:    stack pointer = X
+    fn txs(&mut self, _bus: &mut Bus) -> u8 { 
+        self.stkp = self.x;
+        0
+    }
+
+    
+    // Instruction: Transfer Y Register to Accumulator
+    // Function:    A = Y
+    // Flags Out:   N, Z
+    fn tya(&mut self, _bus: &mut Bus) -> u8 {  
+        self.a = self.y;
+        self.set_flag(FLAG6502_Z, self.a        == 0x00); 
+        self.set_flag(FLAG6502_N, self.a & 0x80 != 0x00); 
+        0
+    }
 
 
 }
