@@ -68,7 +68,7 @@ This project aims to incrementally emulate the original NES hardware, starting w
 - Implement more instructions
 - Add Web GUI for debugging 6502 emulator - it is not fully functional yet but accessible via: https://kunkelalexander.github.io/rustiNESs/
 
-![alt text](7.png)
+![alt text](figures/7.png)
 
 ### Day 3: 16.02.2026
 - Finish implementing CPU instructions
