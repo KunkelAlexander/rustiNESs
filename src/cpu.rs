@@ -1160,7 +1160,18 @@ impl Olc6502 {
         self.stkp -= 1;
         0
     }
-    fn php(&mut self, _bus: &mut Bus) -> u8 { 0 }
+    
+
+    // Instruction: Push Status Register to Stack
+    // Function:    status -> stack
+    // Note:        Break flag is set to 1 before push
+    fn php(&mut self, bus: &mut Bus) -> u8 {
+        self.write(bus, 0x0100 + (self.stkp as u16), self.status | FLAG6502_B | FLAG6502_U);
+        self.set_flag(FLAG6502_B, false); 
+        self.set_flag(FLAG6502_U, false); 
+        self.stkp -= 1;
+        0
+    }
     // Pop from stack
     // 0x0100 is hard-coded stack-location
     fn pla(&mut self, bus: &mut Bus) -> u8 { 
@@ -1180,8 +1191,40 @@ impl Olc6502 {
         0
     }
 
-    fn rol(&mut self, _bus: &mut Bus) -> u8 { 0 }
-    fn ror(&mut self, _bus: &mut Bus) -> u8 { 0 }
+    fn rol(&mut self, bus: &mut Bus) -> u8 { 
+        self.fetch(bus);
+        let temp = ((self.fetched as u16) << 1 ) | self.get_flag(FLAG6502_C);
+        self.set_flag(FLAG6502_C,  temp & 0xFF00  != 0x0000);
+        self.set_flag(FLAG6502_Z, (temp & 0x00FF) == 0x0000);
+        self.set_flag(FLAG6502_N,  temp & 0x0080  != 0x0000);
+
+        let inst = self.lookup[self.opcode as usize];
+
+        if inst.addrmode != Olc6502::imp {
+            self.a = (temp & 0x00FF) as u8;
+        } else {
+            self.write(bus, self.addr_abs, (temp & 0x00FF) as u8);
+        }
+        0
+    }
+
+    fn ror(&mut self, bus: &mut Bus) -> u8 { 
+        self.fetch(bus);
+        let temp = ((self.fetched as u16) >> 1 ) | ((self.get_flag(FLAG6502_C) << 7) as u16);
+        self.set_flag(FLAG6502_C,  self.fetched & 0x01  != 0x00);
+        self.set_flag(FLAG6502_Z, (temp & 0x00FF) == 0x0000);
+        self.set_flag(FLAG6502_N,  temp & 0x0080  != 0x0000);
+
+        let inst = self.lookup[self.opcode as usize];
+
+        if inst.addrmode != Olc6502::imp {
+            self.a = (temp & 0x00FF) as u8;
+        } else {
+            self.write(bus, self.addr_abs, (temp & 0x00FF) as u8);
+        }
+        0
+    }
+
     fn rti(&mut self, bus: &mut Bus) -> u8 { 
         self.stkp = self.stkp.wrapping_add(1); 
         self.status = self.read(bus, (0x0100 as u16) + (self.stkp as u16));
