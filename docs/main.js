@@ -189,15 +189,38 @@ function bindUI() {
     if (!emu) return;
     pauseRun();
 
-    const src = $("asmInput").value;
-    log("Assemble clicked (placeholder)");
-    log("Assembler not wired yet.");
+    try {
+      const src = $("asmInput").value;
+      const program = parseHexProgram(src);
 
-    // Later:
-    // const bytes = emu.assemble(src) OR assemble in JS
-    // emu.load_program(bytes, 0x8000)
-    // emu.reset()
+      emu.load_program(program, 0x8000);
+
+      updateUI();
+      log(`Loaded ${program.length} bytes at $8000`);
+    } catch (e) {
+      log(`Parse error: ${e.message}`);
+    }
   });
+}
+
+function parseHexProgram(text) {
+  // Remove comments
+  const cleaned = text
+    .replace(/;.*/g, "")
+    .replace(/[^0-9a-fA-F]/g, " ")
+    .trim();
+
+  if (!cleaned) return new Uint8Array([]);
+
+  const bytes = cleaned.split(/\s+/).map(b => {
+    const value = parseInt(b, 16);
+    if (Number.isNaN(value) || value < 0 || value > 255) {
+      throw new Error(`Invalid byte: ${b}`);
+    }
+    return value;
+  });
+
+  return new Uint8Array(bytes);
 }
 
 // --- Boot ---

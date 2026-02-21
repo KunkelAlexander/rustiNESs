@@ -23,6 +23,7 @@ impl Emulator {
     }
 
     pub fn reset(&mut self) {
+        self.bus.reset();
         self.cpu.reset(&mut self.bus);
     }
 
@@ -44,7 +45,7 @@ impl Emulator {
         self.bus.write(0xFFFC, (offset & 0x00FF) as u8);
         self.bus.write(0xFFFD, (offset >> 8) as u8);
 
-        self.reset();
+        self.cpu.reset(&mut self.bus);
     }
 
     pub fn get_registers(&self) -> Vec<u32> {

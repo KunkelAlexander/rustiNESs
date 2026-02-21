@@ -67,13 +67,14 @@ This project aims to incrementally emulate the original NES hardware, starting w
 - Learn Rust from ChatGPT
 - Implement more instructions
 - Add Web GUI for debugging 6502 emulator - it is not fully functional yet but accessible via: https://kunkelalexander.github.io/rustiNESs/
-
+    - I decided to compile the rust code using web assembly `wasm-pack build --target web --out-dir docs/pkg` and have ChatGPT write a GUI using JS/CSS/HTML. I really like this solution as it forces me to write a clean Rust interface and does not add unneccessary code to the emulator itself
+    
 ![alt text](figures/7.png)
 
 ### Day 3: 16.02.2026
 - Finish implementing CPU instructions
 - Wire up Harte's test suite for testing all the operations: https://github.com/SingleStepTests/65x02/tree/main
-- `cargo test harte_nes6502_v1_all_opcodes -- --nocapture`
+- `cargo test --release -- --nocapture`
 - Fails :/, that's for another day
 
 ### Day 4: 21.02.2026

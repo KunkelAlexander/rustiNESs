@@ -30,5 +30,9 @@ impl Bus {
 
         self.ram[start..end].to_vec()
     }
+
+    pub fn reset(&mut self) {
+        self.ram = [0u8; 1024*64];
+    }
 }
 
