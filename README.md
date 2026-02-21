@@ -76,6 +76,13 @@ This project aims to incrementally emulate the original NES hardware, starting w
 - `cargo test harte_nes6502_v1_all_opcodes -- --nocapture`
 - Fails :/, that's for another day
 
+### Day 4: 21.02.2026
+- Switch from function pointers in lookup table to match statement with enum to avoid compiler warnings (and I personally also really dislike function pointers from C, I am sure this will also make debugging easier)
+- Work on making Harte's test suite pass with help from [Nesdev](https://www.nesdev.org/wiki/Instruction_reference) and ChatGPT
+    - It feel really good to see 10,000's of test cases passing :) 
+- Learn more about debugging Rust
+- All Harte tests for legal operations pass now. I am very happy I chose to test my implementation because I did find a few bugs that would have been annoying to find otherwise. 
+
 ## Goals
 
 - Learn low-level hardware emulation

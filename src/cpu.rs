@@ -530,6 +530,7 @@ impl Olc6502 {
     // same way as a regular IRQ, but reads the new program counter address
     // form location 0xFFFA.
     pub fn nmi(&mut self, bus: &mut Bus) {
+        // no wrapping because stkp is u8 so there are no overflows
         self.write(bus, 0x0100 + self.stkp as u16, ((self.pc >> 8) & 0x00FF) as u8);
         self.stkp = self.stkp.wrapping_sub(1); 
         self.write(bus, 0x0100 + self.stkp as u16, ((self.pc     ) & 0x00FF) as u8);
@@ -543,8 +544,8 @@ impl Olc6502 {
         self.stkp = self.stkp.wrapping_sub(1); 
 
         self.addr_abs = 0xFFFE;
-        let lo: u16 = self.read(bus,self.addr_abs + 0) as u16;
-        let hi: u16 = self.read(bus,self.addr_abs + 1) as u16;
+        let lo: u16 = self.read(bus,self.addr_abs                ) as u16;
+        let hi: u16 = self.read(bus,self.addr_abs.wrapping_add(1)) as u16;
         self.pc = (hi << 8) | lo; 
         
         self.cycles = 7;
@@ -682,7 +683,7 @@ impl Olc6502 {
     }
 
 
-
+    // Execute one instruction by calling clock until cycles == 0
     pub fn step_instruction(&mut self, bus: &mut Bus) {
         loop {
             self.clock(bus);
@@ -806,7 +807,7 @@ impl Olc6502 {
         self.pc        = self.pc.wrapping_add(1);
         self.addr_abs  = (hi << 8) | lo; 
 
-        self.addr_abs += self.x as u16;
+        self.addr_abs  = self.addr_abs.wrapping_add(self.x as u16);
 
         // If the whole address has changed to a different page, we may need one more clock cycle
         // Overflow: Carry bit from the low byte has carried into the high byt
@@ -827,8 +828,7 @@ impl Olc6502 {
         let hi : u16   = self.read(bus, self.pc) as u16;
         self.pc        = self.pc.wrapping_add(1);
         self.addr_abs  = (hi << 8) | lo; 
-
-        self.addr_abs += self.y as u16;
+        self.addr_abs  = self.addr_abs.wrapping_add(self.y as u16);
 
         // If the whole address has changed to a different page, we may need one more clock cycle
         // Overflow: Carry bit from the low byte has carried into the high byt
@@ -952,22 +952,32 @@ impl Olc6502 {
     // N + N = P - Overflow
     // V register = Was there an overflow? 
     // In the below: most significant bits (0 = positive, 1 = negative)
-    // A M R = V
-    // 0 0 0   0 
-    // 0 0 1   1
-    // 0 1 0   0
-    // 0 1 1   0
-    // 1 0 0   0
-    // 1 0 1   0 
-    // 1 1 0   1
-    // 1 1 1   0
+    // A  M  R | V | A^R | A^M |~(A^M) | 
+    // 0  0  0 | 0 |  0  |  0  |   1   |
+    // 0  0  1 | 1 |  1  |  0  |   1   |
+    // 0  1  0 | 0 |  0  |  1  |   0   |
+    // 0  1  1 | 0 |  1  |  1  |   0   |  so V = ~(A^M) & (A^R)
+    // 1  0  0 | 0 |  1  |  1  |   0   |
+    // 1  0  1 | 0 |  0  |  1  |   0   |
+    // 1  1  0 | 1 |  1  |  0  |   1   |
+    // 1  1  1 | 0 |  0  |  0  |   1   |
     fn adc(&mut self, bus: &mut Bus) -> u8 { 
         self.fetch(bus);
+
+        // Perform the addition
         let temp: u16 = self.a as u16 + self.fetched as u16 + self.get_flag(FLAG6502_C) as u16; 
-        self.set_flag(FLAG6502_C, temp > 255);
-        self.set_flag(FLAG6502_Z, (temp & 0x00FF) == 0); // 
-        self.set_flag(FLAG6502_N, (temp & 0x80) == 0);   // Check the most significant bit
-        self.set_flag(FLAG6502_B,  (!((self.a as u16) ^ (self.fetched as u16)) & ((self.a as u16) ^ (temp as u16)) & 0x0080) != 0);
+
+        self.set_flag(FLAG6502_C,  temp > 0x00FF);            // Check whether addition led to carry bit being set
+        self.set_flag(FLAG6502_Z, (temp & 0x00FF) == 0x0000); // Check whether result of addition is zero
+        self.set_flag(FLAG6502_N, (temp & 0x0080) != 0x0000); // Check the most significant bit of the result for sign
+        // (A^M) 
+        let t1 = (self.a as u16) ^ (self.fetched as u16);
+        // (A^R) 
+        let t2 = (self.a as u16) ^ (temp as u16);
+
+        // Set up signed overflow bit based on the truth table up there
+        // V = ~(A^M) & (A^R) = ~t1 & t2
+        self.set_flag(FLAG6502_V,  ((!t1 & t2 & 0x0080) != 0));
 
         self.a = (temp & 0x00FF) as u8; 
         1 // can require an additional clock cycle
@@ -1011,10 +1021,9 @@ impl Olc6502 {
     // Because BIT only changes CPU flags, it is sometimes used to trigger the read side effects of a hardware register without clobbering any CPU registers, or even to waste cycles as a 3-cycle NOP. As an advanced trick, it is occasionally used to hide a 1- or 2-byte instruction in its operand that is only executed if jumped to directly, allowing two code paths to be interleaved. However, because the instruction in the operand is treated as an address from which to read, this carries risk of triggering side effects if it reads a hardware register. This trick can be useful when working under tight constraints on space, time, or register usage. 
     fn bit(&mut self, bus: &mut Bus) -> u8 { 
         self.fetch(bus);
-        let temp: u16 = (self.a & self.fetched) as u16; 
-        self.set_flag(FLAG6502_Z, (temp & 0xFF00) == 0x00);
-        self.set_flag(FLAG6502_N, self.fetched & (1 << 7) > 0);
-        self.set_flag(FLAG6502_V, self.fetched & (1 << 6) > 0);
+        self.set_flag(FLAG6502_Z, self.a & self.fetched   == 0x00);
+        self.set_flag(FLAG6502_N, self.fetched & (1 << 7) != 0x00);
+        self.set_flag(FLAG6502_V, self.fetched & (1 << 6) != 0x00);
         0
     }
 
@@ -1297,7 +1306,7 @@ impl Olc6502 {
     // Function:    Push current pc to stack, pc = address
     fn jsr(&mut self, bus: &mut Bus) -> u8 { 
         
-        self.pc = self.pc.wrapping_sub(1);
+        self.pc  = self.pc.wrapping_sub(1);
         self.write(bus, 0x0100 + self.stkp as u16, ((self.pc >> 8) & 0x00FF) as u8);
         self.stkp = self.stkp.wrapping_sub(1); 
         self.write(bus, 0x0100 + self.stkp as u16, ((self.pc     ) & 0x00FF) as u8);
@@ -1340,17 +1349,20 @@ impl Olc6502 {
         self.set_flag(FLAG6502_N, self.y & 0x80 != 0x00);
         1
     }
-
+    
+    // Instruction: Logical Shift Right
+    // value = value >> 1, or visually: 0 -> [76543210] -> C 
     fn lsr(&mut self, bus: &mut Bus) -> u8 {
         self.fetch(bus);
         self.set_flag(FLAG6502_C, self.fetched & 0x01 != 0x00);
-        self.set_flag(FLAG6502_Z, self.y              == 0x00);
-        self.set_flag(FLAG6502_N, self.y & 0x80       != 0x00);        
-    
-        let temp : u8 = (self.fetched >> 1) as u8;	
+
+        let temp: u8 = self.fetched >> 1;
+        self.set_flag(FLAG6502_Z, temp        == 0x00);
+        self.set_flag(FLAG6502_N, temp & 0x80 != 0x00);        
+    	
         let inst = LOOKUP[self.opcode as usize];
 
-        if inst.addrmode != AddressMode::IMP {
+        if inst.addrmode == AddressMode::IMP {
             self.a = temp;
         } else {
             self.write(bus, self.addr_abs, temp);
@@ -1401,22 +1413,35 @@ impl Olc6502 {
     // Instruction: Pop Status Register off Stack
     // Function:    Status <- stack
     fn plp(&mut self, bus: &mut Bus) -> u8 { 
-        self.stkp = self.stkp.wrapping_add(1); 
+        self.stkp   = self.stkp.wrapping_add(1); 
+        // Per spec, this should ignore U and B
+        // U (bit 5) should always be 1 internally.
+        // B (bit 4) should always be 0 internally.
+        // B is only set when pushing to the stack (PHP / BRK).
         self.status = self.read(bus, 0x0100 + self.stkp as u16); 
+        
         self.set_flag(FLAG6502_U, true); 
+        self.set_flag(FLAG6502_B, false); // Add this compared to Javidx9's implementation to satisfy Harte
         0
     }
 
+    // Instruction: Rotate Left
+    // Function : value = value << 1 through C, or visually: C <- [76543210] <- C 
+    // ROL shifts a memory value or the accumulator to the left, moving the value of each bit into the next bit and treating the carry flag as though it is both above bit 7 and below bit 0. Specifically, the value in carry is shifted into bit 0, and bit 7 is shifted into carry. Rotating left 9 times simply returns the value and carry back to their original state.
+    // This is a read-modify-write instruction, meaning that its addressing modes that operate on memory first write the original value back to memory before the modified value. This extra write can matter if targeting a hardware register. 
+    // New bit 0  = old Carry
+    // New bit 7  = old bit 6
+    // Carry      = old bit 7
     fn rol(&mut self, bus: &mut Bus) -> u8 { 
         self.fetch(bus);
         let temp = ((self.fetched as u16) << 1 ) | (self.get_flag(FLAG6502_C) as u16);
-        self.set_flag(FLAG6502_C,  temp & 0xFF00  != 0x0000);
-        self.set_flag(FLAG6502_Z, (temp & 0x00FF) == 0x0000);
-        self.set_flag(FLAG6502_N,  temp & 0x0080  != 0x0000);
+        self.set_flag(FLAG6502_C, temp & 0xFF00 != 0x0000);
+        self.set_flag(FLAG6502_Z, temp & 0x00FF == 0x0000);
+        self.set_flag(FLAG6502_N, temp & 0x0080 != 0x0000);
 
         let inst = LOOKUP[self.opcode as usize];
 
-        if inst.addrmode != AddressMode::IMP {
+        if inst.addrmode == AddressMode::IMP {
             self.a = (temp & 0x00FF) as u8;
         } else {
             self.write(bus, self.addr_abs, (temp & 0x00FF) as u8);
@@ -1426,14 +1451,14 @@ impl Olc6502 {
 
     fn ror(&mut self, bus: &mut Bus) -> u8 { 
         self.fetch(bus);
-        let temp = ((self.fetched as u16) >> 1 ) | ((self.get_flag(FLAG6502_C) << 7) as u16);
-        self.set_flag(FLAG6502_C,  self.fetched & 0x01  != 0x00);
-        self.set_flag(FLAG6502_Z, (temp & 0x00FF) == 0x0000);
-        self.set_flag(FLAG6502_N,  temp & 0x0080  != 0x0000);
+        let temp = ((self.fetched as u16) >> 1 ) | ((self.get_flag(FLAG6502_C) as u16) << 7);
+        self.set_flag(FLAG6502_C, self.fetched  & 0x01  != 0x00  );
+        self.set_flag(FLAG6502_Z, temp & 0x00FF         == 0x0000);
+        self.set_flag(FLAG6502_N, temp & 0x0080         != 0x0000);
 
         let inst = LOOKUP[self.opcode as usize];
 
-        if inst.addrmode != AddressMode::IMP {
+        if inst.addrmode == AddressMode::IMP {
             self.a = (temp & 0x00FF) as u8;
         } else {
             self.write(bus, self.addr_abs, (temp & 0x00FF) as u8);
@@ -1441,29 +1466,39 @@ impl Olc6502 {
         0
     }
 
+    // Instruction: Return from Interrupt
+    // pull NVxxDIZC flags from stack
+    // pull PC low byte from stack
+    // pull PC high byte from stack 
     fn rti(&mut self, bus: &mut Bus) -> u8 { 
-        self.stkp = self.stkp.wrapping_add(1); 
-        self.status = self.read(bus, (0x0100 as u16) + (self.stkp as u16));
-        self.status &= !FLAG6502_B;
-        self.status &= !FLAG6502_U;
-        self.stkp = self.stkp.wrapping_add(1); 
-        
-        self.pc    = self.read(bus, 0x0100 + (self.stkp as u16)) as u16;
-        self.stkp = self.stkp.wrapping_add(1); 
-        self.pc   |= (self.read(bus, 0x0100 + (self.stkp as u16)) as u16) << 8;
-        self.stkp = self.stkp.wrapping_add(1); 
+        self.stkp    = self.stkp.wrapping_add(1); 
+        self.status  = self.read(bus, 0x0100 + self.stkp as u16);
+        // Add this compared to Javidx9's implementation to satisfy Harte
+        self.set_flag(FLAG6502_U, true); 
+        self.set_flag(FLAG6502_B, false); 
+        self.stkp    = self.stkp.wrapping_add(1); 
+        self.pc      = self.read(bus, 0x0100 + self.stkp as u16) as u16;
+        self.stkp    = self.stkp.wrapping_add(1); 
+        self.pc     |= (self.read(bus, 0x0100 + self.stkp as u16) as u16) << 8;
         0
     }
+
+    
+    // Instruction: Return from Subroutine
+    // pull PC low byte from stack
+    // pull PC high byte from stack    
+    // PC = PC + 1     
     fn rts(&mut self, bus: &mut Bus) -> u8 { 
         
-        self.pc    = self.read(bus, 0x0100 + (self.stkp as u16)) as u16;
-        self.stkp = self.stkp.wrapping_add(1); 
-        self.pc   |= (self.read(bus, 0x0100 + (self.stkp as u16)) as u16) << 8;
-        self.stkp = self.stkp.wrapping_add(1); 
-
-        self.pc = self.pc.wrapping_add(1);
+        self.stkp   = self.stkp.wrapping_add(1); 
+        self.pc     = self.read(bus, 0x0100 + self.stkp as u16) as u16;
+        self.stkp   = self.stkp.wrapping_add(1); 
+        self.pc    |= (self.read(bus, 0x0100 + self.stkp as u16) as u16) << 8;
+        
+        self.pc     = self.pc.wrapping_add(1);
         0
      }
+
     // Subtraction = A = A - M - (1 - C)
     // A = A + -M + 1 + c
     // 5 = 00000101
@@ -1471,12 +1506,23 @@ impl Olc6502 {
     // implement like addition
     fn sbc(&mut self, bus: &mut Bus) -> u8 {
         self.fetch(bus);
+
+        
+        // Perform the subtraction via an addition of 
         let value : u16 = (self.fetched as u16) ^ 0x00FF;
-        let temp: u16 = self.a as u16 + self.fetched as u16 + self.get_flag(FLAG6502_C) as u16; 
-        self.set_flag(FLAG6502_C, temp > 255);
-        self.set_flag(FLAG6502_Z, (temp & 0x00FF) == 0); // 
-        self.set_flag(FLAG6502_N, (temp & 0x80) == 0);   // Check the most significant bit
-        self.set_flag(FLAG6502_B,  (!((self.a as u16) ^ (self.fetched as u16)) & ((self.a as u16) ^ (temp as u16)) & 0x0080) != 0);
+        let temp: u16 = self.a as u16 + value as u16 + self.get_flag(FLAG6502_C) as u16; 
+
+        self.set_flag(FLAG6502_C,  temp > 0x00FF);            // Check whether addition led to carry bit being set
+        self.set_flag(FLAG6502_Z, (temp & 0x00FF) == 0x0000); // Check whether result of addition is zero
+        self.set_flag(FLAG6502_N, (temp & 0x0080) != 0x0000); // Check the most significant bit of the result for sign
+        // (A^M) 
+        let t1 = (self.a as u16) ^ (value as u16);
+        // (A^R) 
+        let t2 = (self.a as u16) ^ (temp as u16);
+
+        // Set up signed overflow bit based on the truth table up there
+        // V = ~(A^M) & (A^R) = ~t1 & t2
+        self.set_flag(FLAG6502_V,  ((!t1 & t2 & 0x0080) != 0));
 
         self.a = (temp & 0x00FF) as u8; 
         1 // can require an additional clock cycle
