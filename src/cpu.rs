@@ -77,6 +77,9 @@ use crate::bus::Bus;
 
 */
 
+
+// Note that https://www.nesdev.org/wiki/Instruction_reference refers to the U bit as 1 
+// when they write something like the bit order is NV1BDIZC (high to low). 
 pub const FLAG6502_C: u8 = 1 << 0; // Carry Bit
 pub const FLAG6502_Z: u8 = 1 << 1; // Zero
 pub const FLAG6502_I: u8 = 1 << 2; // Disable Interrupts
@@ -207,7 +210,196 @@ pub struct Instruction {
     pub cycles: u8,
 }
 
-    
+
+const fn build_lookup() -> [Instruction; 256] {
+    // default all opcodes to illegal/unknown
+    let xxx = Instruction { name: "???", addrmode: AddressMode::IMP, operation: Operation::XXX, cycles: 2 };
+    let mut t = [xxx; 256];
+
+    // Helper macro to make the table readable
+    macro_rules! op {
+        ($code:expr, $name:expr, $addr:ident, $op:ident, $cy:expr) => {
+            t[$code] = Instruction {
+                name: $name,
+                addrmode: AddressMode::$addr,
+                operation: Operation::$op,
+                cycles: $cy,
+            };
+        };
+    }
+
+    // ----- Official NMOS 6502 opcodes (base cycles) -----
+    op!(0x00, "BRK", IMP, BRK, 7); // Javid uses imm here, but for Harte to pass i need imp
+    op!(0x01, "ORA", IZX, ORA, 6);
+    op!(0x05, "ORA", ZP0, ORA, 3);
+    op!(0x06, "ASL", ZP0, ASL, 5);
+    op!(0x08, "PHP", IMP, PHP, 3);
+    op!(0x09, "ORA", IMM, ORA, 2);
+    op!(0x0A, "ASL", IMP, ASL, 2);
+    op!(0x0D, "ORA", ABS, ORA, 4);
+    op!(0x0E, "ASL", ABS, ASL, 6);
+
+    op!(0x10, "BPL", REL, BPL, 2);
+    op!(0x11, "ORA", IZY, ORA, 5);
+    op!(0x15, "ORA", ZPX, ORA, 4);
+    op!(0x16, "ASL", ZPX, ASL, 6);
+    op!(0x18, "CLC", IMP, CLC, 2);
+    op!(0x19, "ORA", ABY, ORA, 4);
+    op!(0x1D, "ORA", ABX, ORA, 4);
+    op!(0x1E, "ASL", ABX, ASL, 7);
+
+    op!(0x20, "JSR", ABS, JSR, 6);
+    op!(0x21, "AND", IZX, AND, 6);
+    op!(0x24, "BIT", ZP0, BIT, 3);
+    op!(0x25, "AND", ZP0, AND, 3);
+    op!(0x26, "ROL", ZP0, ROL, 5);
+    op!(0x28, "PLP", IMP, PLP, 4);
+    op!(0x29, "AND", IMM, AND, 2);
+    op!(0x2A, "ROL", IMP, ROL, 2);
+    op!(0x2C, "BIT", ABS, BIT, 4);
+    op!(0x2D, "AND", ABS, AND, 4);
+    op!(0x2E, "ROL", ABS, ROL, 6);
+
+    op!(0x30, "BMI", REL, BMI, 2);
+    op!(0x31, "AND", IZY, AND, 5);
+    op!(0x35, "AND", ZPX, AND, 4);
+    op!(0x36, "ROL", ZPX, ROL, 6);
+    op!(0x38, "SEC", IMP, SEC, 2);
+    op!(0x39, "AND", ABY, AND, 4);
+    op!(0x3D, "AND", ABX, AND, 4);
+    op!(0x3E, "ROL", ABX, ROL, 7);
+
+    op!(0x40, "RTI", IMP, RTI, 6);
+    op!(0x41, "EOR", IZX, EOR, 6);
+    op!(0x45, "EOR", ZP0, EOR, 3);
+    op!(0x46, "LSR", ZP0, LSR, 5);
+    op!(0x48, "PHA", IMP, PHA, 3);
+    op!(0x49, "EOR", IMM, EOR, 2);
+    op!(0x4A, "LSR", IMP, LSR, 2);
+    op!(0x4C, "JMP", ABS, JMP, 3);
+    op!(0x4D, "EOR", ABS, EOR, 4);
+    op!(0x4E, "LSR", ABS, LSR, 6);
+
+    op!(0x50, "BVC", REL, BVC, 2);
+    op!(0x51, "EOR", IZY, EOR, 5);
+    op!(0x55, "EOR", ZPX, EOR, 4);
+    op!(0x56, "LSR", ZPX, LSR, 6);
+    op!(0x58, "CLI", IMP, CLI, 2);
+    op!(0x59, "EOR", ABY, EOR, 4);
+    op!(0x5D, "EOR", ABX, EOR, 4);
+    op!(0x5E, "LSR", ABX, LSR, 7);
+
+    op!(0x60, "RTS", IMP, RTS, 6);
+    op!(0x61, "ADC", IZX, ADC, 6);
+    op!(0x65, "ADC", ZP0, ADC, 3);
+    op!(0x66, "ROR", ZP0, ROR, 5);
+    op!(0x68, "PLA", IMP, PLA, 4);
+    op!(0x69, "ADC", IMM, ADC, 2);
+    op!(0x6A, "ROR", IMP, ROR, 2);
+    op!(0x6C, "JMP", IND, JMP, 5);
+    op!(0x6D, "ADC", ABS, ADC, 4);
+    op!(0x6E, "ROR", ABS, ROR, 6);
+
+    op!(0x70, "BVS", REL, BVS, 2);
+    op!(0x71, "ADC", IZY, ADC, 5);
+    op!(0x75, "ADC", ZPX, ADC, 4);
+    op!(0x76, "ROR", ZPX, ROR, 6);
+    op!(0x78, "SEI", IMP, SEI, 2);
+    op!(0x79, "ADC", ABY, ADC, 4);
+    op!(0x7D, "ADC", ABX, ADC, 4);
+    op!(0x7E, "ROR", ABX, ROR, 7);
+
+    op!(0x81, "STA", IZX, STA, 6);
+    op!(0x84, "STY", ZP0, STY, 3);
+    op!(0x85, "STA", ZP0, STA, 3);
+    op!(0x86, "STX", ZP0, STX, 3);
+    op!(0x88, "DEY", IMP, DEY, 2);
+    op!(0x8A, "TXA", IMP, TXA, 2);
+    op!(0x8C, "STY", ABS, STY, 4);
+    op!(0x8D, "STA", ABS, STA, 4);
+    op!(0x8E, "STX", ABS, STX, 4);
+
+    op!(0x90, "BCC", REL, BCC, 2);
+    op!(0x91, "STA", IZY, STA, 6);
+    op!(0x94, "STY", ZPX, STY, 4);
+    op!(0x95, "STA", ZPX, STA, 4);
+    op!(0x96, "STX", ZPY, STX, 4);
+    op!(0x98, "TYA", IMP, TYA, 2);
+    op!(0x99, "STA", ABY, STA, 5);
+    op!(0x9A, "TXS", IMP, TXS, 2);
+    op!(0x9D, "STA", ABX, STA, 5);
+
+    op!(0xA0, "LDY", IMM, LDY, 2);
+    op!(0xA1, "LDA", IZX, LDA, 6);
+    op!(0xA2, "LDX", IMM, LDX, 2);
+    op!(0xA4, "LDY", ZP0, LDY, 3);
+    op!(0xA5, "LDA", ZP0, LDA, 3);
+    op!(0xA6, "LDX", ZP0, LDX, 3);
+    op!(0xA8, "TAY", IMP, TAY, 2);
+    op!(0xA9, "LDA", IMM, LDA, 2);
+    op!(0xAA, "TAX", IMP, TAX, 2);
+    op!(0xAC, "LDY", ABS, LDY, 4);
+    op!(0xAD, "LDA", ABS, LDA, 4);
+    op!(0xAE, "LDX", ABS, LDX, 4);
+
+    op!(0xB0, "BCS", REL, BCS, 2);
+    op!(0xB1, "LDA", IZY, LDA, 5);
+    op!(0xB4, "LDY", ZPX, LDY, 4);
+    op!(0xB5, "LDA", ZPX, LDA, 4);
+    op!(0xB6, "LDX", ZPY, LDX, 4);
+    op!(0xB8, "CLV", IMP, CLV, 2);
+    op!(0xB9, "LDA", ABY, LDA, 4);
+    op!(0xBA, "TSX", IMP, TSX, 2);
+    op!(0xBC, "LDY", ABX, LDY, 4);
+    op!(0xBD, "LDA", ABX, LDA, 4);
+    op!(0xBE, "LDX", ABY, LDX, 4);
+
+    op!(0xC0, "CPY", IMM, CPY, 2);
+    op!(0xC1, "CMP", IZX, CMP, 6);
+    op!(0xC4, "CPY", ZP0, CPY, 3);
+    op!(0xC5, "CMP", ZP0, CMP, 3);
+    op!(0xC6, "DEC", ZP0, DEC, 5);
+    op!(0xC8, "INY", IMP, INY, 2);
+    op!(0xC9, "CMP", IMM, CMP, 2);
+    op!(0xCA, "DEX", IMP, DEX, 2);
+    op!(0xCC, "CPY", ABS, CPY, 4);
+    op!(0xCD, "CMP", ABS, CMP, 4);
+    op!(0xCE, "DEC", ABS, DEC, 6);
+
+    op!(0xD0, "BNE", REL, BNE, 2);
+    op!(0xD1, "CMP", IZY, CMP, 5);
+    op!(0xD5, "CMP", ZPX, CMP, 4);
+    op!(0xD6, "DEC", ZPX, DEC, 6);
+    op!(0xD8, "CLD", IMP, CLD, 2);
+    op!(0xD9, "CMP", ABY, CMP, 4);
+    op!(0xDD, "CMP", ABX, CMP, 4);
+    op!(0xDE, "DEC", ABX, DEC, 7);
+
+    op!(0xE0, "CPX", IMM, CPX, 2);
+    op!(0xE1, "SBC", IZX, SBC, 6);
+    op!(0xE4, "CPX", ZP0, CPX, 3);
+    op!(0xE5, "SBC", ZP0, SBC, 3);
+    op!(0xE6, "INC", ZP0, INC, 5);
+    op!(0xE8, "INX", IMP, INX, 2);
+    op!(0xE9, "SBC", IMM, SBC, 2);
+    op!(0xEA, "NOP", IMP, NOP, 2);
+    op!(0xEC, "CPX", ABS, CPX, 4);
+    op!(0xED, "SBC", ABS, SBC, 4);
+    op!(0xEE, "INC", ABS, INC, 6);
+
+    op!(0xF0, "BEQ", REL, BEQ, 2);
+    op!(0xF1, "SBC", IZY, SBC, 5);
+    op!(0xF5, "SBC", ZPX, SBC, 4);
+    op!(0xF6, "INC", ZPX, INC, 6);
+    op!(0xF8, "SED", IMP, SED, 2);
+    op!(0xF9, "SBC", ABY, SBC, 4);
+    op!(0xFD, "SBC", ABX, SBC, 4);
+    op!(0xFE, "INC", ABX, INC, 7);
+
+    t
+}
+
+pub static LOOKUP: [Instruction; 256] = build_lookup();
 
 pub struct Olc6502 {
     // registers
@@ -224,9 +416,6 @@ pub struct Olc6502 {
     addr_rel : u16,
     opcode   : u8, 
     cycles   : u8,
-
-    
-    lookup: [Instruction; 256],
 }
 
 
@@ -248,8 +437,6 @@ impl Olc6502 {
             addr_rel: 0, 
             opcode:   0,
             cycles:   0,
-
-            lookup: Self::build_lookup(),
         }
     }
 
@@ -266,12 +453,6 @@ impl Olc6502 {
 
     // Writes a byte to the bus at the specified address
     pub fn write(&self, bus: &mut Bus, addr: u16, data: u8) {
-        
-        println!(
-            "PUSH: writing {:02X} to {:04X} (SP before = {:02X})",
-            data, addr, self.stkp
-        );
-
 
         bus.write(addr, data)
     }
@@ -350,16 +531,16 @@ impl Olc6502 {
     // form location 0xFFFA.
     pub fn nmi(&mut self, bus: &mut Bus) {
         self.write(bus, 0x0100 + self.stkp as u16, ((self.pc >> 8) & 0x00FF) as u8);
-        self.stkp -= 1; 
+        self.stkp = self.stkp.wrapping_sub(1); 
         self.write(bus, 0x0100 + self.stkp as u16, ((self.pc     ) & 0x00FF) as u8);
-        self.stkp -= 1; 
+        self.stkp = self.stkp.wrapping_sub(1); 
 
         self.set_flag(FLAG6502_B, false);
         self.set_flag(FLAG6502_U, true);
         self.set_flag(FLAG6502_I, true);
 
         self.write(bus, 0x0100 + self.stkp as u16, self.status);
-        self.stkp -= 1; 
+        self.stkp = self.stkp.wrapping_sub(1); 
 
         self.addr_abs = 0xFFFE;
         let lo: u16 = self.read(bus,self.addr_abs + 0) as u16;
@@ -384,14 +565,12 @@ impl Olc6502 {
     
         // Only actually do work once enough time has passed
         if self.cycles == 0 {
-            println!("PC at clock entry: {:04X}", self.pc);
             // Read one byte from bus containing the opcode
             self.opcode = bus.read(self.pc, true);
             self.set_flag(FLAG6502_U, true);
             self.pc = self.pc.wrapping_add(1);
 
-            println!("PC wenn calling break: {:04X}", self.pc);
-            let inst = self.lookup[self.opcode as usize];
+            let inst = LOOKUP[self.opcode as usize];
             self.cycles = inst.cycles;
             
             // addressing mode
@@ -713,7 +892,7 @@ impl Olc6502 {
         let hi : u16   = self.read(bus, (t + 1) & 0x00FF) as u16; 
 
         self.addr_abs  = (hi << 8) | lo; 
-        self.addr_abs += self.y as u16; 
+        self.addr_abs  = self.addr_abs.wrapping_add(self.y as u16); 
 
         if (self.addr_abs & 0xFF00) != (hi << 8) {
             1
@@ -738,7 +917,7 @@ impl Olc6502 {
     // is a variable global to the CPU, and is set by calling this 
     // function. It also returns it for convenience.
     pub fn fetch(&mut self, bus: &mut Bus) -> u8 {
-        let inst = self.lookup[self.opcode as usize];
+        let inst = LOOKUP[self.opcode as usize];
 
         if inst.addrmode != AddressMode::IMP {
             self.fetched = self.read(bus, self.addr_abs);
@@ -748,200 +927,11 @@ impl Olc6502 {
     }
 
 
-
-    fn build_lookup() -> [Instruction; 256] {
-        // default all opcodes to illegal/unknown
-        let xxx = Instruction { name: "???", addrmode: AddressMode::IMP, operation: Operation::XXX, cycles: 2 };
-        let mut t = [xxx; 256];
-
-        // Helper macro to make the table readable
-        macro_rules! op {
-            ($code:expr, $name:expr, $addr:ident, $op:ident, $cy:expr) => {
-                t[$code] = Instruction {
-                    name: $name,
-                    addrmode: AddressMode::$addr,
-                    operation: Operation::$op,
-                    cycles: $cy,
-                };
-            };
-        }
-
-        // ----- Official NMOS 6502 opcodes (base cycles) -----
-        op!(0x00, "BRK", IMP, BRK, 7); // Javid uses imm here, but for Harte to pass i need imp
-        op!(0x01, "ORA", IZX, ORA, 6);
-        op!(0x05, "ORA", ZP0, ORA, 3);
-        op!(0x06, "ASL", ZP0, ASL, 5);
-        op!(0x08, "PHP", IMP, PHP, 3);
-        op!(0x09, "ORA", IMM, ORA, 2);
-        op!(0x0A, "ASL", IMP, ASL, 2);
-        op!(0x0D, "ORA", ABS, ORA, 4);
-        op!(0x0E, "ASL", ABS, ASL, 6);
-
-        op!(0x10, "BPL", REL, BPL, 2);
-        op!(0x11, "ORA", IZY, ORA, 5);
-        op!(0x15, "ORA", ZPX, ORA, 4);
-        op!(0x16, "ASL", ZPX, ASL, 6);
-        op!(0x18, "CLC", IMP, CLC, 2);
-        op!(0x19, "ORA", ABY, ORA, 4);
-        op!(0x1D, "ORA", ABX, ORA, 4);
-        op!(0x1E, "ASL", ABX, ASL, 7);
-
-        op!(0x20, "JSR", ABS, JSR, 6);
-        op!(0x21, "AND", IZX, AND, 6);
-        op!(0x24, "BIT", ZP0, BIT, 3);
-        op!(0x25, "AND", ZP0, AND, 3);
-        op!(0x26, "ROL", ZP0, ROL, 5);
-        op!(0x28, "PLP", IMP, PLP, 4);
-        op!(0x29, "AND", IMM, AND, 2);
-        op!(0x2A, "ROL", IMP, ROL, 2);
-        op!(0x2C, "BIT", ABS, BIT, 4);
-        op!(0x2D, "AND", ABS, AND, 4);
-        op!(0x2E, "ROL", ABS, ROL, 6);
-
-        op!(0x30, "BMI", REL, BMI, 2);
-        op!(0x31, "AND", IZY, AND, 5);
-        op!(0x35, "AND", ZPX, AND, 4);
-        op!(0x36, "ROL", ZPX, ROL, 6);
-        op!(0x38, "SEC", IMP, SEC, 2);
-        op!(0x39, "AND", ABY, AND, 4);
-        op!(0x3D, "AND", ABX, AND, 4);
-        op!(0x3E, "ROL", ABX, ROL, 7);
-
-        op!(0x40, "RTI", IMP, RTI, 6);
-        op!(0x41, "EOR", IZX, EOR, 6);
-        op!(0x45, "EOR", ZP0, EOR, 3);
-        op!(0x46, "LSR", ZP0, LSR, 5);
-        op!(0x48, "PHA", IMP, PHA, 3);
-        op!(0x49, "EOR", IMM, EOR, 2);
-        op!(0x4A, "LSR", IMP, LSR, 2);
-        op!(0x4C, "JMP", ABS, JMP, 3);
-        op!(0x4D, "EOR", ABS, EOR, 4);
-        op!(0x4E, "LSR", ABS, LSR, 6);
-
-        op!(0x50, "BVC", REL, BVC, 2);
-        op!(0x51, "EOR", IZY, EOR, 5);
-        op!(0x55, "EOR", ZPX, EOR, 4);
-        op!(0x56, "LSR", ZPX, LSR, 6);
-        op!(0x58, "CLI", IMP, CLI, 2);
-        op!(0x59, "EOR", ABY, EOR, 4);
-        op!(0x5D, "EOR", ABX, EOR, 4);
-        op!(0x5E, "LSR", ABX, LSR, 7);
-
-        op!(0x60, "RTS", IMP, RTS, 6);
-        op!(0x61, "ADC", IZX, ADC, 6);
-        op!(0x65, "ADC", ZP0, ADC, 3);
-        op!(0x66, "ROR", ZP0, ROR, 5);
-        op!(0x68, "PLA", IMP, PLA, 4);
-        op!(0x69, "ADC", IMM, ADC, 2);
-        op!(0x6A, "ROR", IMP, ROR, 2);
-        op!(0x6C, "JMP", IND, JMP, 5);
-        op!(0x6D, "ADC", ABS, ADC, 4);
-        op!(0x6E, "ROR", ABS, ROR, 6);
-
-        op!(0x70, "BVS", REL, BVS, 2);
-        op!(0x71, "ADC", IZY, ADC, 5);
-        op!(0x75, "ADC", ZPX, ADC, 4);
-        op!(0x76, "ROR", ZPX, ROR, 6);
-        op!(0x78, "SEI", IMP, SEI, 2);
-        op!(0x79, "ADC", ABY, ADC, 4);
-        op!(0x7D, "ADC", ABX, ADC, 4);
-        op!(0x7E, "ROR", ABX, ROR, 7);
-
-        op!(0x81, "STA", IZX, STA, 6);
-        op!(0x84, "STY", ZP0, STY, 3);
-        op!(0x85, "STA", ZP0, STA, 3);
-        op!(0x86, "STX", ZP0, STX, 3);
-        op!(0x88, "DEY", IMP, DEY, 2);
-        op!(0x8A, "TXA", IMP, TXA, 2);
-        op!(0x8C, "STY", ABS, STY, 4);
-        op!(0x8D, "STA", ABS, STA, 4);
-        op!(0x8E, "STX", ABS, STX, 4);
-
-        op!(0x90, "BCC", REL, BCC, 2);
-        op!(0x91, "STA", IZY, STA, 6);
-        op!(0x94, "STY", ZPX, STY, 4);
-        op!(0x95, "STA", ZPX, STA, 4);
-        op!(0x96, "STX", ZPY, STX, 4);
-        op!(0x98, "TYA", IMP, TYA, 2);
-        op!(0x99, "STA", ABY, STA, 5);
-        op!(0x9A, "TXS", IMP, TXS, 2);
-        op!(0x9D, "STA", ABX, STA, 5);
-
-        op!(0xA0, "LDY", IMM, LDY, 2);
-        op!(0xA1, "LDA", IZX, LDA, 6);
-        op!(0xA2, "LDX", IMM, LDX, 2);
-        op!(0xA4, "LDY", ZP0, LDY, 3);
-        op!(0xA5, "LDA", ZP0, LDA, 3);
-        op!(0xA6, "LDX", ZP0, LDX, 3);
-        op!(0xA8, "TAY", IMP, TAY, 2);
-        op!(0xA9, "LDA", IMM, LDA, 2);
-        op!(0xAA, "TAX", IMP, TAX, 2);
-        op!(0xAC, "LDY", ABS, LDY, 4);
-        op!(0xAD, "LDA", ABS, LDA, 4);
-        op!(0xAE, "LDX", ABS, LDX, 4);
-
-        op!(0xB0, "BCS", REL, BCS, 2);
-        op!(0xB1, "LDA", IZY, LDA, 5);
-        op!(0xB4, "LDY", ZPX, LDY, 4);
-        op!(0xB5, "LDA", ZPX, LDA, 4);
-        op!(0xB6, "LDX", ZPY, LDX, 4);
-        op!(0xB8, "CLV", IMP, CLV, 2);
-        op!(0xB9, "LDA", ABY, LDA, 4);
-        op!(0xBA, "TSX", IMP, TSX, 2);
-        op!(0xBC, "LDY", ABX, LDY, 4);
-        op!(0xBD, "LDA", ABX, LDA, 4);
-        op!(0xBE, "LDX", ABY, LDX, 4);
-
-        op!(0xC0, "CPY", IMM, CPY, 2);
-        op!(0xC1, "CMP", IZX, CMP, 6);
-        op!(0xC4, "CPY", ZP0, CPY, 3);
-        op!(0xC5, "CMP", ZP0, CMP, 3);
-        op!(0xC6, "DEC", ZP0, DEC, 5);
-        op!(0xC8, "INY", IMP, INY, 2);
-        op!(0xC9, "CMP", IMM, CMP, 2);
-        op!(0xCA, "DEX", IMP, DEX, 2);
-        op!(0xCC, "CPY", ABS, CPY, 4);
-        op!(0xCD, "CMP", ABS, CMP, 4);
-        op!(0xCE, "DEC", ABS, DEC, 6);
-
-        op!(0xD0, "BNE", REL, BNE, 2);
-        op!(0xD1, "CMP", IZY, CMP, 5);
-        op!(0xD5, "CMP", ZPX, CMP, 4);
-        op!(0xD6, "DEC", ZPX, DEC, 6);
-        op!(0xD8, "CLD", IMP, CLD, 2);
-        op!(0xD9, "CMP", ABY, CMP, 4);
-        op!(0xDD, "CMP", ABX, CMP, 4);
-        op!(0xDE, "DEC", ABX, DEC, 7);
-
-        op!(0xE0, "CPX", IMM, CPX, 2);
-        op!(0xE1, "SBC", IZX, SBC, 6);
-        op!(0xE4, "CPX", ZP0, CPX, 3);
-        op!(0xE5, "SBC", ZP0, SBC, 3);
-        op!(0xE6, "INC", ZP0, INC, 5);
-        op!(0xE8, "INX", IMP, INX, 2);
-        op!(0xE9, "SBC", IMM, SBC, 2);
-        op!(0xEA, "NOP", IMP, NOP, 2);
-        op!(0xEC, "CPX", ABS, CPX, 4);
-        op!(0xED, "SBC", ABS, SBC, 4);
-        op!(0xEE, "INC", ABS, INC, 6);
-
-        op!(0xF0, "BEQ", REL, BEQ, 2);
-        op!(0xF1, "SBC", IZY, SBC, 5);
-        op!(0xF5, "SBC", ZPX, SBC, 4);
-        op!(0xF6, "INC", ZPX, INC, 6);
-        op!(0xF8, "SED", IMP, SED, 2);
-        op!(0xF9, "SBC", ABY, SBC, 4);
-        op!(0xFD, "SBC", ABX, SBC, 4);
-        op!(0xFE, "INC", ABX, INC, 7);
-
-        t
-    }
-
-
     // This function captures illegal opcodes
     fn xxx(&mut self, _bus: &mut Bus) -> u8 { 0 }
 
-    // add data fetched from memory to accumulator, including the carry bit
+    // Addition!
+    // Add data fetched from memory to accumulator, including the carry bit
     // A += M + C
     // A = 250
     // M = 10 - answer is 4 + carry bit
@@ -1004,7 +994,7 @@ impl Olc6502 {
         self.set_flag(FLAG6502_Z, (temp & 0x00FF) == 0x00);
         self.set_flag(FLAG6502_N, (temp & 0x80)   > 0);
         
-        let inst = self.lookup[self.opcode as usize];
+        let inst = LOOKUP[self.opcode as usize];
         
         if inst.addrmode == AddressMode::IMP {
             self.a = (temp & 0x00FF) as u8;
@@ -1033,7 +1023,6 @@ impl Olc6502 {
     // Push current program counter and process flags to the stack
     // Set interrupt disable flag and jump to IRQ handler
     fn brk(&mut self, bus: &mut Bus) -> u8 {
-        println!("PC at break entry: {:04X}", self.pc);
         self.pc = self.pc.wrapping_add(1);
         self.write(bus, 0x0100 + self.stkp as u16, ((self.pc >> 8) & 0x00FF) as u8);
         self.stkp = self.stkp.wrapping_sub(1); 
@@ -1061,12 +1050,12 @@ impl Olc6502 {
      // helper function to implement branching
      // Consumes 1 or 2 cycles and updates pc to pc + addr_rel
     fn branch(&mut self, bus: &mut Bus) {
-        self.cycles += 1;
-        self.addr_abs = self.pc + self.addr_rel; 
+        self.cycles   = self.cycles.wrapping_add(1);
+        self.addr_abs = self.pc.wrapping_add(self.addr_rel); 
 
         // second cycle of clock penalty if we cross a page boundary
         if (self.addr_abs & 0xFF00) != (self.pc & 0xFF00) {
-            self.cycles += 1; 
+            self.cycles = self.cycles.wrapping_add(1); 
         }
         self.pc = self.addr_abs;
     }
@@ -1173,10 +1162,11 @@ impl Olc6502 {
     // Flags Out:   N, C, Z
     fn cmp(&mut self, bus: &mut Bus) -> u8 { 
         self.fetch(bus);
+        // keep the borrow bit information by computing as u16
         let temp: u16 = (self.a as u16) - (self.fetched  as u16); 
         self.set_flag(FLAG6502_C, self.a >= self.fetched);
-        self.set_flag(FLAG6502_Z, (temp & 0x00FF) == 0x0000);
-        self.set_flag(FLAG6502_N, temp & 0x0080 != 0);
+        self.set_flag(FLAG6502_Z, temp & 0x00FF == 0x0000);
+        self.set_flag(FLAG6502_N, temp & 0x0080 != 0x0000);
         1
      }
 
@@ -1187,8 +1177,8 @@ impl Olc6502 {
         self.fetch(bus);
         let temp: u16 = (self.x as u16) - (self.fetched  as u16); 
         self.set_flag(FLAG6502_C, self.x >= self.fetched);
-        self.set_flag(FLAG6502_Z, (temp & 0x00FF) == 0x0000);
-        self.set_flag(FLAG6502_N, temp & 0x0080 != 0);
+        self.set_flag(FLAG6502_Z, temp & 0x00FF == 0x0000);
+        self.set_flag(FLAG6502_N, temp & 0x0080 != 0x0000);
         1
 
     }
@@ -1201,8 +1191,8 @@ impl Olc6502 {
         self.fetch(bus);
         let temp: u16 = (self.y as u16) - (self.fetched  as u16); 
         self.set_flag(FLAG6502_C, self.y >= self.fetched);
-        self.set_flag(FLAG6502_Z, (temp & 0x00FF) == 0x0000);
-        self.set_flag(FLAG6502_N, temp & 0x0080 != 0);
+        self.set_flag(FLAG6502_Z, temp & 0x00FF == 0x0000);
+        self.set_flag(FLAG6502_N, temp & 0x0080 != 0x0000);
         1
      }
 
@@ -1353,12 +1343,12 @@ impl Olc6502 {
 
     fn lsr(&mut self, bus: &mut Bus) -> u8 {
         self.fetch(bus);
-        self.set_flag(FLAG6502_C, self.fetched & 0x01 != 0);
-        let temp : u8 = (self.fetched >> 1) as u8;	
-        self.set_flag(FLAG6502_Z, self.y        == 0x00);
-        self.set_flag(FLAG6502_N, self.y & 0x80 != 0x00);        
+        self.set_flag(FLAG6502_C, self.fetched & 0x01 != 0x00);
+        self.set_flag(FLAG6502_Z, self.y              == 0x00);
+        self.set_flag(FLAG6502_N, self.y & 0x80       != 0x00);        
     
-        let inst = self.lookup[self.opcode as usize];
+        let temp : u8 = (self.fetched >> 1) as u8;	
+        let inst = LOOKUP[self.opcode as usize];
 
         if inst.addrmode != AddressMode::IMP {
             self.a = temp;
@@ -1382,8 +1372,8 @@ impl Olc6502 {
     // Push accumulator to the stack
     // 0x0100 is hard-coded stack-location
     fn pha(&mut self, bus: &mut Bus) -> u8 {
-        self.write(bus, (0x0100 as u16) + (self.stkp as u16), self.a);
-        self.stkp -= 1;
+        self.write(bus, 0x0100 + (self.stkp as u16), self.a);
+        self.stkp = self.stkp.wrapping_sub(1);
         0
     }
     
@@ -1394,14 +1384,14 @@ impl Olc6502 {
     fn php(&mut self, bus: &mut Bus) -> u8 {
         self.write(bus, 0x0100 + (self.stkp as u16), self.status | FLAG6502_B | FLAG6502_U);
         self.set_flag(FLAG6502_B, false); 
-        self.set_flag(FLAG6502_U, false); 
-        self.stkp -= 1;
+        // self.set_flag(FLAG6502_U, false);  Comment this out compared to Javid9x' implementation to satisfy Harte
+        self.stkp = self.stkp.wrapping_sub(1);
         0
     }
     // Pop from stack
     // 0x0100 is hard-coded stack-location
     fn pla(&mut self, bus: &mut Bus) -> u8 { 
-        self.stkp += 1; 
+        self.stkp = self.stkp.wrapping_add(1); 
         self.a = self.read(bus, (0x0100 as u16) + (self.stkp as u16));
         self.set_flag(FLAG6502_Z, self.a == 0x00); 
         self.set_flag(FLAG6502_N, self.a & 0x80 != 0); 
@@ -1424,7 +1414,7 @@ impl Olc6502 {
         self.set_flag(FLAG6502_Z, (temp & 0x00FF) == 0x0000);
         self.set_flag(FLAG6502_N,  temp & 0x0080  != 0x0000);
 
-        let inst = self.lookup[self.opcode as usize];
+        let inst = LOOKUP[self.opcode as usize];
 
         if inst.addrmode != AddressMode::IMP {
             self.a = (temp & 0x00FF) as u8;
@@ -1441,7 +1431,7 @@ impl Olc6502 {
         self.set_flag(FLAG6502_Z, (temp & 0x00FF) == 0x0000);
         self.set_flag(FLAG6502_N,  temp & 0x0080  != 0x0000);
 
-        let inst = self.lookup[self.opcode as usize];
+        let inst = LOOKUP[self.opcode as usize];
 
         if inst.addrmode != AddressMode::IMP {
             self.a = (temp & 0x00FF) as u8;
@@ -1471,7 +1461,7 @@ impl Olc6502 {
         self.pc   |= (self.read(bus, 0x0100 + (self.stkp as u16)) as u16) << 8;
         self.stkp = self.stkp.wrapping_add(1); 
 
-        self.pc += 1;
+        self.pc = self.pc.wrapping_add(1);
         0
      }
     // Subtraction = A = A - M - (1 - C)
