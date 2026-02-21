@@ -140,135 +140,244 @@ fn assert_ram_matches(bus: &Bus, expected: &HarteState, case_name: &str) {
     }
 }
 
-fn is_official_opcode(op: u8) -> bool {
-    matches!(op,
-        0x00 | 0x01 | 0x05 | 0x06 | 0x08 | 0x09 | 0x0A | 0x0D | 0x0E |
-        0x10 | 0x11 | 0x15 | 0x16 | 0x18 | 0x19 | 0x1D | 0x1E |
-        0x20 | 0x21 | 0x24 | 0x25 | 0x26 | 0x28 | 0x29 | 0x2A | 0x2C | 0x2D | 0x2E |
-        0x30 | 0x31 | 0x35 | 0x36 | 0x38 | 0x39 | 0x3D | 0x3E |
-        0x40 | 0x41 | 0x45 | 0x46 | 0x48 | 0x49 | 0x4A | 0x4C | 0x4D | 0x4E |
-        0x50 | 0x51 | 0x55 | 0x56 | 0x58 | 0x59 | 0x5D | 0x5E |
-        0x60 | 0x61 | 0x65 | 0x66 | 0x68 | 0x69 | 0x6A | 0x6C | 0x6D | 0x6E |
-        0x70 | 0x71 | 0x75 | 0x76 | 0x78 | 0x79 | 0x7D | 0x7E |
-        0x81 | 0x84 | 0x85 | 0x86 | 0x88 | 0x8A | 0x8C | 0x8D | 0x8E |
-        0x90 | 0x91 | 0x94 | 0x95 | 0x96 | 0x98 | 0x99 | 0x9A | 0x9D |
-        0xA0 | 0xA1 | 0xA2 | 0xA4 | 0xA5 | 0xA6 | 0xA8 | 0xA9 | 0xAA | 0xAC | 0xAD | 0xAE |
-        0xB0 | 0xB1 | 0xB4 | 0xB5 | 0xB6 | 0xB8 | 0xB9 | 0xBA | 0xBC | 0xBD | 0xBE |
-        0xC0 | 0xC1 | 0xC4 | 0xC5 | 0xC6 | 0xC8 | 0xC9 | 0xCA | 0xCC | 0xCD | 0xCE |
-        0xD0 | 0xD1 | 0xD5 | 0xD6 | 0xD8 | 0xD9 | 0xDD | 0xDE |
-        0xE0 | 0xE1 | 0xE4 | 0xE5 | 0xE6 | 0xE8 | 0xE9 | 0xEA | 0xEC | 0xED | 0xEE |
-        0xF0 | 0xF1 | 0xF5 | 0xF6 | 0xF8 | 0xF9 | 0xFD | 0xFE
-    )
-}
 
 //
 // Main test
 //
+macro_rules! harte_test {
+    ($name:ident, $file:expr) => {
+        #[test]
+        fn $name() {
+            run_opcode_file($file);
+        }
+    };
+}
 
-#[test]
-fn harte_nes6502_v1_all_opcodes() {
-    let base_dir = Path::new("tests/harte/nes6502/v1");
+fn run_opcode_file(filename : &str) {
+    let path = Path::new("tests/harte/nes6502/v1").join(filename);
 
-    assert!(
-        base_dir.exists(),
-        "Harte tests not found at {}. Put the JSON files there.",
-        base_dir.display()
-    );
-
-    let mut entries: Vec<_> = fs::read_dir(base_dir)
-        .unwrap()
-        .map(|e| e.unwrap().path())
-        .filter(|p| p.extension().map(|e| e == "json").unwrap_or(false))
-        .collect();
-
-    entries.sort();
-
-    assert!(
-        !entries.is_empty(),
-        "No .json files found in {}",
-        base_dir.display()
-    );
 
     let mut cpu = Olc6502::new();
     let mut bus = Bus::new();
 
-    // Run every opcode file
-    for path in entries {
-        let opcode_file = path
-            .file_name()
-            .unwrap()
-            .to_string_lossy()
-            .to_string();
+    let opcode_file = path
+        .file_name()
+        .unwrap()
+        .to_string_lossy()
+        .to_string();
 
-        let cases = load_cases_from_file(&path);
+    let cases = load_cases_from_file(&path);
 
-        // Sanity: Harte files are typically 10,000 cases
-        assert!(
-            !cases.is_empty(),
-            "No test cases in {}",
-            opcode_file
+    // Sanity: Harte files are typically 10,000 cases
+    assert!(
+        !cases.is_empty(),
+        "No test cases in {}",
+        opcode_file
+    );
+
+    for (i, case) in cases.iter().enumerate() {
+        // Setup
+        init_bus_from_state(&mut bus, &case.initial);
+        set_cpu_from_state(&mut cpu, &case.initial);
+
+        // Run exactly one instruction
+        let cycles_taken = run_one_instruction(&mut cpu, &mut bus);
+
+        // Validate cycle count
+        let expected_cycles = case.cycles.len();
+        assert_eq!(
+            cycles_taken, expected_cycles,
+            "[{} case {} '{}'] cycle count mismatch: got {}, expected {}",
+            opcode_file, i, case.name, cycles_taken, expected_cycles
         );
 
-        // Skip illegal opcodes for now
-        let opcode: u8 = u8::from_str_radix(&opcode_file[..2], 16).unwrap();
+        let (a, x, y, s, pc, p) = cpu.get_registers();
+        
+        let expected = &case.final_state;
 
-        if !is_official_opcode(opcode) {
-            continue;
-        }
+        let mismatch =
+            pc != expected.pc ||
+            s  != expected.s  ||
+            a  != expected.a  ||
+            x  != expected.x  ||
+            y  != expected.y  ||
+            p  != expected.p;
 
-        println!("Running {}", opcode_file);
-        for (i, case) in cases.iter().enumerate() {
+            if mismatch {
+                println!("Running {} case {}", opcode_file, i);
+                println!(
+                    "EXPECTED: PC={:04X} S={:02X} A={:02X} X={:02X} Y={:02X} P={:02X}",
+                    expected.pc,
+                    expected.s,
+                    expected.a,
+                    expected.x,
+                    expected.y,
+                    expected.p,
+                );
 
-            // Setup
-            init_bus_from_state(&mut bus, &case.initial);
-            set_cpu_from_state(&mut cpu, &case.initial);
+                println!(
+                    "GOT:      PC={:04X} S={:02X} A={:02X} X={:02X} Y={:02X} P={:02X}",
+                    pc, s, a, x, y, p
+                );
+            }
 
-            // Run exactly one instruction
-            let cycles_taken = run_one_instruction(&mut cpu, &mut bus);
+        // Validate final CPU state
+        assert_cpu_matches(&cpu, &case.final_state, &format!("{} case {} '{}'", opcode_file, i, case.name));
 
-            // Validate cycle count
-            let expected_cycles = case.cycles.len();
-            assert_eq!(
-                cycles_taken, expected_cycles,
-                "[{} case {} '{}'] cycle count mismatch: got {}, expected {}",
-                opcode_file, i, case.name, cycles_taken, expected_cycles
-            );
-
-            let (a, x, y, s, pc, p) = cpu.get_registers();
-            
-            let expected = &case.final_state;
-
-            let mismatch =
-                pc != expected.pc ||
-                s  != expected.s  ||
-                a  != expected.a  ||
-                x  != expected.x  ||
-                y  != expected.y  ||
-                p  != expected.p;
-
-                if mismatch {
-                    println!("Running {} case {}", opcode_file, i);
-                    println!(
-                        "EXPECTED: PC={:04X} S={:02X} A={:02X} X={:02X} Y={:02X} P={:02X}",
-                        expected.pc,
-                        expected.s,
-                        expected.a,
-                        expected.x,
-                        expected.y,
-                        expected.p,
-                    );
-
-                    println!(
-                        "GOT:      PC={:04X} S={:02X} A={:02X} X={:02X} Y={:02X} P={:02X}",
-                        pc, s, a, x, y, p
-                    );
-                }
-
-            // Validate final CPU state
-            assert_cpu_matches(&cpu, &case.final_state, &format!("{} case {} '{}'", opcode_file, i, case.name));
-
-            // Validate final RAM state (only specified addresses)
-            assert_ram_matches(&bus, &case.final_state, &format!("{} case {} '{}'", opcode_file, i, case.name));
-        }
+        // Validate final RAM state (only specified addresses)
+        assert_ram_matches(&bus, &case.final_state, &format!("{} case {} '{}'", opcode_file, i, case.name));
     }
 }
+
+
+harte_test!(opcode_00, "00.json");
+harte_test!(opcode_01, "01.json");
+harte_test!(opcode_05, "05.json");
+harte_test!(opcode_06, "06.json");
+harte_test!(opcode_08, "08.json");
+harte_test!(opcode_09, "09.json");
+harte_test!(opcode_0a, "0a.json");
+harte_test!(opcode_0d, "0d.json");
+harte_test!(opcode_0e, "0e.json"); 
+harte_test!(opcode_10, "10.json");
+harte_test!(opcode_11, "11.json");
+harte_test!(opcode_15, "15.json");
+harte_test!(opcode_16, "16.json");
+harte_test!(opcode_18, "18.json");
+harte_test!(opcode_19, "19.json");
+harte_test!(opcode_1d, "1d.json");
+harte_test!(opcode_1e, "1e.json"); 
+harte_test!(opcode_20, "20.json");
+harte_test!(opcode_21, "21.json");
+harte_test!(opcode_24, "24.json");
+harte_test!(opcode_25, "25.json");
+harte_test!(opcode_26, "26.json");
+harte_test!(opcode_28, "28.json");
+harte_test!(opcode_29, "29.json");
+harte_test!(opcode_2a, "2a.json");
+harte_test!(opcode_2c, "2c.json");
+harte_test!(opcode_2d, "2d.json");
+harte_test!(opcode_2e, "2e.json"); 
+harte_test!(opcode_30, "30.json");
+harte_test!(opcode_31, "31.json");
+harte_test!(opcode_35, "35.json");
+harte_test!(opcode_36, "36.json");
+harte_test!(opcode_38, "38.json");
+harte_test!(opcode_39, "39.json");
+harte_test!(opcode_3d, "3d.json");
+harte_test!(opcode_3e, "3e.json"); 
+harte_test!(opcode_40, "40.json");
+harte_test!(opcode_41, "41.json");
+harte_test!(opcode_45, "45.json");
+harte_test!(opcode_46, "46.json");
+harte_test!(opcode_48, "48.json");
+harte_test!(opcode_49, "49.json");
+harte_test!(opcode_4a, "4a.json");
+harte_test!(opcode_4c, "4c.json");
+harte_test!(opcode_4d, "4d.json");
+harte_test!(opcode_4e, "4e.json"); 
+harte_test!(opcode_50, "50.json");
+harte_test!(opcode_51, "51.json");
+harte_test!(opcode_55, "55.json");
+harte_test!(opcode_56, "56.json");
+harte_test!(opcode_58, "58.json");
+harte_test!(opcode_59, "59.json");
+harte_test!(opcode_5d, "5d.json");
+harte_test!(opcode_5e, "5e.json"); 
+harte_test!(opcode_60, "60.json");
+harte_test!(opcode_61, "61.json");
+harte_test!(opcode_65, "65.json");
+harte_test!(opcode_66, "66.json");
+harte_test!(opcode_68, "68.json");
+harte_test!(opcode_69, "69.json");
+harte_test!(opcode_6a, "6a.json");
+harte_test!(opcode_6c, "6c.json");
+harte_test!(opcode_6d, "6d.json");
+harte_test!(opcode_6e, "6e.json"); 
+harte_test!(opcode_70, "70.json");
+harte_test!(opcode_71, "71.json");
+harte_test!(opcode_75, "75.json");
+harte_test!(opcode_76, "76.json");
+harte_test!(opcode_78, "78.json");
+harte_test!(opcode_79, "79.json");
+harte_test!(opcode_7d, "7d.json");
+harte_test!(opcode_7e, "7e.json"); 
+harte_test!(opcode_81, "81.json");
+harte_test!(opcode_84, "84.json");
+harte_test!(opcode_85, "85.json");
+harte_test!(opcode_86, "86.json");
+harte_test!(opcode_88, "88.json");
+harte_test!(opcode_8a, "8a.json");
+harte_test!(opcode_8c, "8c.json");
+harte_test!(opcode_8d, "8d.json");
+harte_test!(opcode_8e, "8e.json");
+harte_test!(opcode_90, "90.json");
+harte_test!(opcode_91, "91.json");
+harte_test!(opcode_94, "94.json");
+harte_test!(opcode_95, "95.json");
+harte_test!(opcode_96, "96.json");
+harte_test!(opcode_98, "98.json");
+harte_test!(opcode_99, "99.json");
+harte_test!(opcode_9a, "9a.json");
+harte_test!(opcode_9d, "9d.json"); 
+harte_test!(opcode_a0, "a0.json");
+harte_test!(opcode_a1, "a1.json");
+harte_test!(opcode_a2, "a2.json");
+harte_test!(opcode_a4, "a4.json");
+harte_test!(opcode_a5, "a5.json");
+harte_test!(opcode_a6, "a6.json");
+harte_test!(opcode_a8, "a8.json");
+harte_test!(opcode_a9, "a9.json");
+harte_test!(opcode_aa, "aa.json");
+harte_test!(opcode_ac, "ac.json");
+harte_test!(opcode_ad, "ad.json");
+harte_test!(opcode_ae, "ae.json");
+harte_test!(opcode_b0, "b0.json");
+harte_test!(opcode_b1, "b1.json");
+harte_test!(opcode_b4, "b4.json");
+harte_test!(opcode_b5, "b5.json");
+harte_test!(opcode_b6, "b6.json");
+harte_test!(opcode_b8, "b8.json");
+harte_test!(opcode_b9, "b9.json");
+harte_test!(opcode_ba, "ba.json");
+harte_test!(opcode_bc, "bc.json");
+harte_test!(opcode_bd, "bd.json");
+harte_test!(opcode_be, "be.json"); 
+harte_test!(opcode_c0, "c0.json");
+harte_test!(opcode_c1, "c1.json");
+harte_test!(opcode_c4, "c4.json");
+harte_test!(opcode_c5, "c5.json");
+harte_test!(opcode_c6, "c6.json");
+harte_test!(opcode_c8, "c8.json");
+harte_test!(opcode_c9, "c9.json");
+harte_test!(opcode_ca, "ca.json");
+harte_test!(opcode_cc, "cc.json");
+harte_test!(opcode_cd, "cd.json");
+harte_test!(opcode_ce, "ce.json");
+harte_test!(opcode_d0, "d0.json");
+harte_test!(opcode_d1, "d1.json");
+harte_test!(opcode_d5, "d5.json");
+harte_test!(opcode_d6, "d6.json");
+harte_test!(opcode_d8, "d8.json");
+harte_test!(opcode_d9, "d9.json");
+harte_test!(opcode_dd, "dd.json");
+harte_test!(opcode_de, "de.json");
+harte_test!(opcode_e0, "e0.json");
+harte_test!(opcode_e1, "e1.json");
+harte_test!(opcode_e4, "e4.json");
+harte_test!(opcode_e5, "e5.json");
+harte_test!(opcode_e6, "e6.json");
+harte_test!(opcode_e8, "e8.json");
+harte_test!(opcode_e9, "e9.json");
+harte_test!(opcode_ea, "ea.json");
+harte_test!(opcode_ec, "ec.json");
+harte_test!(opcode_ed, "ed.json");
+harte_test!(opcode_ee, "ee.json"); 
+harte_test!(opcode_f0, "f0.json");
+harte_test!(opcode_f1, "f1.json");
+harte_test!(opcode_f5, "f5.json");
+harte_test!(opcode_f6, "f6.json");
+harte_test!(opcode_f8, "f8.json");
+harte_test!(opcode_f9, "f9.json");
+harte_test!(opcode_fd, "fd.json");
+harte_test!(opcode_fe, "fe.json");
