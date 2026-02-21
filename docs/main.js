@@ -18,6 +18,26 @@ function setStatus(ok, text) {
   $("statusDot").style.background = ok ? "#36d399" : "#ff5c7c";
   $("statusText").innerText = text;
 }
+function formatStatusFlags(status) {
+  const flags = [
+    ["N", 7],
+    ["V", 6],
+    ["U", 5],
+    ["B", 4],
+    ["D", 3],
+    ["I", 2],
+    ["Z", 1],
+    ["C", 0],
+  ];
+
+  return flags
+    .map(([name, bit]) => {
+      const value = (status >> bit) & 1;
+      const cls = value ? "flag-on" : "flag-off";
+      return `<span class="flag ${cls}">${name}</span>`;
+    })
+    .join(" ");
+}
 
 // --- UI updates ---
 function renderRegisters() {
@@ -31,7 +51,7 @@ function renderRegisters() {
   $("y").innerText = y.toString(16).padStart(2, "0").toUpperCase();
   $("sp").innerText = sp.toString(16).padStart(2, "0").toUpperCase();
   $("pc").innerText = pc.toString(16).padStart(4, "0").toUpperCase();
-  $("status").innerText = status.toString(2).padStart(8, "0");
+  $("status").innerHTML = formatStatusFlags(status);
 
   
   const s = emu.get_cpu_state();
@@ -92,7 +112,6 @@ function renderRam() {
   }
 
   renderBlock(0x0000);
-  renderBlock(0x8000);
 }
 
 
@@ -162,28 +181,33 @@ function bindUI() {
 
   $("btnStep").addEventListener("click", () => {
     if (!emu) return;
-    emu.step_instruction();
 
+    emu.step_instruction();
     updateUI();
+    log(`Step instruction()`);
   });
 
 
   $("btnAssemble").addEventListener("click", () => {
     if (!emu) return;
     pauseRun();
+    loadProgram();
 
-    try {
-      const src = $("asmInput").value;
-      const program = parseHexProgram(src);
-
-      emu.load_program(program, 0x8000);
-
-      updateUI();
-      log(`Loaded ${program.length} bytes at $8000`);
-    } catch (e) {
-      log(`Parse error: ${e.message}`);
-    }
   });
+}
+
+function loadProgram() {
+  try {
+    const src = $("asmInput").value;
+    const program = parseHexProgram(src);
+
+    emu.load_program(program, 0x0000);
+
+    updateUI();
+    log(`Loaded program of length ${program.length} bytes at $0000`);
+  } catch (e) {
+    log(`Parse error: ${e.message}`);
+  }
 }
 
 function parseHexProgram(text) {
@@ -220,6 +244,10 @@ async function boot() {
 
     log("Emulator created");
     log("Ready.");
+
+    loadProgram();
+
+
   } catch (e) {
     console.error(e);
     setStatus(false, "Failed to load WASM");
