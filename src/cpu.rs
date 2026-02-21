@@ -158,6 +158,13 @@ impl Olc6502 {
 
     // Writes a byte to the bus at the specified address
     pub fn write(&self, bus: &mut Bus, addr: u16, data: u8) {
+        
+        println!(
+            "PUSH: writing {:02X} to {:04X} (SP before = {:02X})",
+            data, addr, self.stkp
+        );
+
+
         bus.write(addr, data)
     }
 
@@ -269,11 +276,13 @@ impl Olc6502 {
     
         // Only actually do work once enough time has passed
         if self.cycles == 0 {
+            println!("PC at clock entry: {:04X}", self.pc);
             // Read one byte from bus containing the opcode
             self.opcode = bus.read(self.pc, true);
             self.set_flag(FLAG6502_U, true);
             self.pc = self.pc.wrapping_add(1);
 
+            println!("PC wenn calling break: {:04X}", self.pc);
             let inst = self.lookup[self.opcode as usize];
             self.cycles = inst.cycles;
             let additional_cycle1 = (inst.addrmode)(self, bus);
@@ -552,7 +561,7 @@ impl Olc6502 {
         }
 
         // ----- Official NMOS 6502 opcodes (base cycles) -----
-        op!(0x00, "BRK", imm, brk, 7);
+        op!(0x00, "BRK", imp, brk, 7); // Javid uses imm here, but for Harte to pass i need imp
         op!(0x01, "ORA", izx, ora, 6);
         op!(0x05, "ORA", zp0, ora, 3);
         op!(0x06, "ASL", zp0, asl, 5);
@@ -818,7 +827,7 @@ impl Olc6502 {
     // Push current program counter and process flags to the stack
     // Set interrupt disable flag and jump to IRQ handler
     fn brk(&mut self, bus: &mut Bus) -> u8 {
-        
+        println!("PC at break entry: {:04X}", self.pc);
         self.pc = self.pc.wrapping_add(1);
         self.write(bus, 0x0100 + self.stkp as u16, ((self.pc >> 8) & 0x00FF) as u8);
         self.stkp = self.stkp.wrapping_sub(1); 
@@ -826,12 +835,12 @@ impl Olc6502 {
         self.stkp = self.stkp.wrapping_sub(1); 
 
         self.set_flag(FLAG6502_B, true);
-        self.set_flag(FLAG6502_I, true);
 
         self.write(bus, 0x0100 + self.stkp as u16, self.status);
         self.stkp = self.stkp.wrapping_sub(1); 
 
         self.set_flag(FLAG6502_B, false);
+        self.set_flag(FLAG6502_I, true);
 
         self.addr_abs = 0xFFFE;
         let lo: u16 = self.read(bus,self.addr_abs + 0) as u16;

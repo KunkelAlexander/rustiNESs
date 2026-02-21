@@ -189,9 +189,40 @@ fn harte_nes6502_v1_all_opcodes() {
         );
 
         for (i, case) in cases.iter().enumerate() {
+
+            // Debug only one test case
+            if i > 1 {
+                break;
+            }
+
+
+            println!("Running {} case {}", opcode_file, i);
+
             // Setup
             init_bus_from_state(&mut bus, &case.initial);
             set_cpu_from_state(&mut cpu, &case.initial);
+
+            println!("---- AFTER LOADING INITIAL STATE ----");
+
+            let (a, x, y, s, pc, p) = cpu.get_registers();
+            println!("CPU:");
+            println!("  PC = {:04X} (expected {:04X})", pc, case.initial.pc);
+            println!("  S  = {:02X} (expected {:02X})", s, case.initial.s);
+            println!("  A  = {:02X} (expected {:02X})", a, case.initial.a);
+            println!("  X  = {:02X} (expected {:02X})", x, case.initial.x);
+            println!("  Y  = {:02X} (expected {:02X})", y, case.initial.y);
+            println!("  P  = {:02X} (expected {:02X})", p, case.initial.p);
+
+            println!("RAM patches:");
+            for (addr, expected_val) in &case.initial.ram {
+                let got = bus.read(*addr, true);
+                println!(
+                    "  {:04X}: {:02X} (expected {:02X})",
+                    addr, got, expected_val
+                );
+            }
+            println!("--------------------------------------");
+
 
             // Run exactly one instruction
             let cycles_taken = run_one_instruction(&mut cpu, &mut bus);
@@ -203,6 +234,13 @@ fn harte_nes6502_v1_all_opcodes() {
                 "[{} case {} '{}'] cycle count mismatch: got {}, expected {}",
                 opcode_file, i, case.name, cycles_taken, expected_cycles
             );
+
+            let (a, x, y, s, pc, p) = cpu.get_registers();
+
+            println!("EXPECTED: {:?}", case.final_state);
+            println!("GOT: A={:02X} X={:02X} Y={:02X} S={:02X} PC={:04X} P={:02X}",
+                a, x, y, s, pc, p);
+
 
             // Validate final CPU state
             assert_cpu_matches(&cpu, &case.final_state, &format!("{} case {} '{}'", opcode_file, i, case.name));
