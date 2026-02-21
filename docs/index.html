@@ -25,9 +25,9 @@
       <section class="card">
         <h2>Program code</h2>
         <textarea id="asmInput" spellcheck="false">
-        A9 42
-        8D 00 02
-        4C 00 80
+A9 42
+8D 00 02
+4C 00 80
         </textarea>
 
         <div class="row">
@@ -43,15 +43,6 @@
         <div class="controls">
           <button id="btnStep">Step Instruction</button>
           <button id="btnClock">Clock (1 cycle)</button>
-          <button id="btnRun" class="primary">Run</button>
-          <button id="btnPause">Pause</button>
-        </div>
-
-        <div class="row">
-          <label class="label">
-            Cycles / frame
-            <input id="cyclesPerFrame" type="number" min="1" value="5000" />
-          </label>
         </div>
 
         <div class="log" id="log"></div>
@@ -80,11 +71,56 @@
         </div>
       </section>
 
-      <!-- RAM -->
-      <section class="card wide">
-        <h2>RAM</h2>
-        <div class="ram" id="ramGrid"></div>
-      </section>
+  <!-- RAM + Beginner Panel -->
+  <section class="card wide">
+    <h2>RAM</h2>
+
+    <div class="ram-wrap">
+      <div class="ram" id="ramGrid"></div>
+
+      <aside class="learn" aria-label="Beginner explanation">
+        <h3>What the 6502 is doing</h3>
+
+        <p>
+          The 6502 is a tiny CPU. It repeatedly:
+          <strong>fetches</strong> a byte from memory (an instruction),
+          <strong>decodes</strong> what it means, then <strong>executes</strong> it.
+        </p>
+
+        <div class="learn-block">
+          <h4>Key ideas</h4>
+          <ul>
+            <li><strong>RAM</strong> is just a big list of bytes (00–FF) at addresses (0000–FFFF).</li>
+            <li><strong>PC</strong> (Program Counter) is “where the next instruction lives.”</li>
+            <li><strong>A</strong> is the main working register (“the CPU’s hand”).</li>
+            <li><strong>Fetch → Decode → Execute</strong> happens over several <strong>cycles</strong>.</li>
+          </ul>
+        </div>
+
+        <div class="learn-block">
+          <h4>This demo program</h4>
+          <ol>
+            <li><code>A9 42</code> = <strong>LDA #$42</strong> → put 42 into <strong>A</strong></li>
+            <li><code>8D 00 02</code> = <strong>STA $0200</strong> → write <strong>A</strong> into RAM at <code>$0200</code></li>
+            <li><code>4C 00 80</code> = <strong>JMP $8000</strong> → set <strong>PC</strong> back to <code>$8000</code> (loop)</li>
+          </ol>
+          <p class="muted">
+            Result: RAM at <code>$0200</code> becomes <code>42</code> and stays that way, while the PC loops forever.
+          </p>
+        </div>
+
+        <div class="learn-block">
+          <h4>What to watch in the panel in the upper right?</h4>
+          <ul>
+            <li><strong>PC highlight</strong> shows where the CPU is reading next.</li>
+            <li><strong>OPCODE</strong> shows the current instruction byte (like A9 / 8D / 4C).</li>
+            <li><strong>ADDR_ABS</strong> shows the computed memory address (like 0200).</li>
+            <li><strong>A</strong> should become <code>42</code> after the first step.</li>
+          </ul>
+        </div>
+      </aside>
+    </div>
+  </section>
     </main>
 
     <script type="module" src="./main.js"></script>

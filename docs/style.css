@@ -243,10 +243,169 @@ input[type="number"] {
   border: 1px solid #ffcc00;
 }
 
+.ram-wrap{
+  display: grid;
+  grid-template-columns: 1fr 1500px;
+  gap: 16px;
+  align-items: start;
+}
+
+.learn{
+  border-left: 1px solid rgba(255,255,255,0.12);
+  padding-left: 16px;
+}
+
+.learn h3{
+  margin: 0 0 8px 0;
+}
+
+.learn h4{
+  margin: 12px 0 6px 0;
+  font-size: 0.95rem;
+  opacity: 0.9;
+}
+
+.learn-block{
+  padding: 10px 12px;
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 12px;
+  margin: 10px 0;
+}
+
+.learn code{
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.92em;
+}
+
+.learn .muted{
+  opacity: 0.8;
+  margin-top: 8px;
+}
+
+/* Responsive: stack under RAM on small screens */
+@media (max-width: 980px){
+  .ram-wrap{
+    grid-template-columns: 1fr;
+  }
+  .learn{
+    border-left: none;
+    padding-left: 0;
+    border-top: 1px solid rgba(255,255,255,0.12);
+    padding-top: 12px;
+  }
+}
+
 /* ---------- Hints ---------- */
 
 .hint {
   margin: 14px 0 0;
   color: var(--muted);
   font-size: 13px;
+}
+
+
+/* =========================================================
+   Responsive layout
+   Paste at the bottom of your CSS
+   ========================================================= */
+
+/* Tablet: reduce padding + go to 2 columns */
+@media (max-width: 1100px) {
+  .topbar {
+    padding: 20px 24px;
+    gap: 16px;
+  }
+
+  .grid {
+    padding: 24px;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+  }
+
+  /* Let "wide" still span full width */
+  .card.wide {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Phone: stack everything in 1 column */
+@media (max-width: 720px) {
+  .topbar {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 16px 16px;
+  }
+
+  .status {
+    align-self: flex-start;
+  }
+
+  .grid {
+    padding: 16px;
+    grid-template-columns: 1fr; /* ✅ stack all cards */
+    gap: 14px;
+  }
+
+  .card {
+    padding: 16px;
+  }
+
+  textarea {
+    height: 180px;
+  }
+
+  input[type="number"] {
+    width: 100%;
+  }
+
+  /* RAM + Learn: stack */
+  .ram-wrap {
+    grid-template-columns: 1fr;
+  }
+
+  .learn {
+    border-left: none;
+    padding-left: 0;
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+  }
+
+  /* Make RAM usable on small screens:
+     - wrap the grid in horizontal scroll
+     - keep cells same size */
+  #ramGrid {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 6px;
+  }
+
+  .ram {
+    /* keep the grid from shrinking into unreadable sizes */
+    width: max-content;
+    min-width: 600px;
+  }
+}
+
+/* Extra small phones */
+@media (max-width: 420px) {
+  .card {
+    padding: 14px;
+    border-radius: 16px;
+  }
+
+  button {
+    width: 100%;
+  }
+
+  .controls {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
 }

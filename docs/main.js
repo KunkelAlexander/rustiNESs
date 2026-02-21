@@ -155,7 +155,6 @@ function bindUI() {
 
   $("btnClock").addEventListener("click", () => {
     if (!emu) return;
-    pauseRun();
     emu.clock();
     updateUI();
     log("Clock()");
@@ -163,27 +162,11 @@ function bindUI() {
 
   $("btnStep").addEventListener("click", () => {
     if (!emu) return;
-    pauseRun();
-
-    if (emu.step_instruction) {
-      emu.step_instruction();
-      log("Step instruction");
-    } else {
-      // fallback: do a few clocks
-      for (let i = 0; i < 10; i++) emu.clock();
-      log("Step fallback (10 cycles)");
-    }
+    emu.step_instruction();
 
     updateUI();
   });
 
-  $("btnRun").addEventListener("click", () => {
-    startRun();
-  });
-
-  $("btnPause").addEventListener("click", () => {
-    pauseRun();
-  });
 
   $("btnAssemble").addEventListener("click", () => {
     if (!emu) return;
