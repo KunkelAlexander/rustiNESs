@@ -26,8 +26,8 @@
         <h2>Program code</h2>
         <textarea id="asmInput" spellcheck="false">
 A9 42
-8D 00 02
-4C 00 80
+8D 20 00
+4C 00 00
         </textarea>
 
         <div class="row">
@@ -104,11 +104,11 @@ A9 42
           <h4>This demo program</h4>
           <ol>
             <li><code>A9 42</code> = <strong>LDA #$42</strong> → put 42 into <strong>A</strong></li>
-            <li><code>8D 00 02</code> = <strong>STA $0200</strong> → write <strong>A</strong> into RAM at <code>$0200</code></li>
-            <li><code>4C 00 80</code> = <strong>JMP $8000</strong> → set <strong>PC</strong> back to <code>$8000</code> (loop)</li>
+            <li><code>8D 20 00</code> = <strong>STA $0020</strong> → write <strong>A</strong> into RAM at <code>$0020</code></li>
+            <li><code>4C 00 00</code> = <strong>JMP $0000</strong> → set <strong>PC</strong> back to <code>$0000</code> (loop)</li>
           </ol>
           <p class="muted">
-            Result: RAM at <code>$0200</code> becomes <code>42</code> and stays that way, while the PC loops forever.
+            Result: RAM at <code>$0020</code> becomes <code>42</code> and stays that way, while the PC loops forever.
           </p>
         </div>
 
@@ -117,7 +117,7 @@ A9 42
           <ul>
             <li><strong>PC highlight</strong> shows where the CPU is reading next.</li>
             <li><strong>OPCODE</strong> shows the current instruction byte (like A9 / 8D / 4C).</li>
-            <li><strong>ADDR_ABS</strong> shows the computed memory address (like 0200).</li>
+            <li><strong>ADDR_ABS</strong> shows the computed memory address (like 0020).</li>
             <li><strong>A</strong> should become <code>42</code> after the first step.</li>
           </ul>
         </div>

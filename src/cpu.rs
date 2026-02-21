@@ -685,12 +685,18 @@ impl Olc6502 {
 
     // Execute one instruction by calling clock until cycles == 0
     pub fn step_instruction(&mut self, bus: &mut Bus) {
-        loop {
+        // Finish pending cycles
+        while self.cycles > 0 {
             self.clock(bus);
-            if !(self.cycles > 0) {
-                break;
-            }
-        } 
+        }
+
+        // Start instruction
+        self.clock(bus);
+
+        // Finish the instruction
+        while self.cycles > 0 {
+            self.clock(bus);
+        }
     }
 
 

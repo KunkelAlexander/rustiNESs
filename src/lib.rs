@@ -31,7 +31,6 @@ impl Emulator {
         self.cpu.clock(&mut self.bus);
     }
 
-    
     pub fn step_instruction(&mut self) { 
         self.cpu.step_instruction(&mut self.bus);
      }
