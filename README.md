@@ -68,7 +68,7 @@ This project aims to incrementally emulate the original NES hardware, starting w
 - Implement more instructions
 - Add Web GUI for debugging 6502 emulator - it is not fully functional yet but accessible via: https://kunkelalexander.github.io/rustiNESs/
     - I decided to compile the rust code using web assembly `wasm-pack build --target web --out-dir docs/pkg` and have ChatGPT write a GUI using JS/CSS/HTML. I really like this solution as it forces me to write a clean Rust interface and does not add unneccessary code to the emulator itself
-    
+
 ![alt text](figures/7.png)
 
 ### Day 3: 16.02.2026
@@ -80,9 +80,10 @@ This project aims to incrementally emulate the original NES hardware, starting w
 ### Day 4: 21.02.2026
 - Switch from function pointers in lookup table to match statement with enum to avoid compiler warnings (and I personally also really dislike function pointers from C, I am sure this will also make debugging easier)
 - Work on making Harte's test suite pass with help from [Nesdev](https://www.nesdev.org/wiki/Instruction_reference) and ChatGPT
-    - It feel really good to see 10,000's of test cases passing :) 
-- Learn more about debugging Rust
+    - It feel really good to see tens of thousands of test cases passing :) 
 - All Harte tests for legal operations pass now. I am very happy I chose to test my implementation because I did find a few bugs that would have been annoying to find otherwise. 
+- Update web interface to except byte code and to correctly load programs - it can now be used to test the emulator. Next up is Javid9x' second video. 
+
 
 ## Goals
 
