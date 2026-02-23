@@ -6,6 +6,44 @@ This project aims to incrementally emulate the original NES hardware, starting w
 
 ## Devlog
 
+## Day 5: 23.03.2026
+- Watch [NES Emulator Part #3: Buses, RAMs, ROMs & Mappers](https://www.youtube.com/watch?v=xdzOvpYPmGE)
+
+- The RAM has 8 kB of addressable space but actually it's 8 kB mod 2kB - an idea called mirroring
+
+![](figures/8.png)
+
+- The modulo operation is expressed via a bit-wise logic and 0x1234 & 0x07ff = 0x0234 which is within the addressable range
+- There is more than just the RAM attached to the Bus and the Picture Processing Unit also has its own micro-Bus. Both buses access the cartridge which contains the program ROM, a mapper and patterns
+
+![](figures/9.png)
+
+- The cartridge can contain many memory chips and the mapper maps addresses to the right memory location based on how it was configured by the CPU/PPU - This is why there where no loading times, it's just the addresses were mapped differently. 
+
+![](figures/10.png)
+### Day 4: 21.02.2026
+- Switch from function pointers in lookup table to match statement with enum to avoid compiler warnings (and I personally also really dislike function pointers from C, I am sure this will also make debugging easier)
+- Work on making Harte's test suite pass with help from [Nesdev](https://www.nesdev.org/wiki/Instruction_reference) and ChatGPT
+    - It feel really good to see tens of thousands of test cases passing :) 
+- All Harte tests for legal operations pass now. I am very happy I chose to test my implementation because I did find a few bugs that would have been annoying to find otherwise. 
+- Update web interface to except byte code and to correctly load programs - it can now be used to test the emulator. Next up is Javid9x' second video. 
+
+### Day 3: 16.02.2026
+- Finish implementing CPU instructions
+- Wire up Harte's test suite for testing all the operations: https://github.com/SingleStepTests/65x02/tree/main
+- `cargo test --release -- --nocapture`
+- Fails :/, that's for another day
+
+
+### Day 2: 14.02.2026
+
+- Learn Rust from ChatGPT
+- Implement more instructions
+- Add Web GUI for debugging 6502 emulator - it is not fully functional yet but accessible via: https://kunkelalexander.github.io/rustiNESs/
+    - I decided to compile the rust code using web assembly `wasm-pack build --target web --out-dir docs/pkg` and have ChatGPT write a GUI using JS/CSS/HTML. I really like this solution as it forces me to write a clean Rust interface and does not add unneccessary code to the emulator itself
+
+![alt text](figures/7.png)
+
 ### Day 1: 01.02.2026
 - Watch [NES Emulator Part #1: Bitwise Basics & Overview](https://www.youtube.com/watch?v=F8kx56OZQhg)
 - Watch [NES Emulator Part #2: The CPU (6502 Implementation)](https://www.youtube.com/watch?v=8XmxKPJDGU0)
@@ -60,29 +98,6 @@ This project aims to incrementally emulate the original NES hardware, starting w
     - 3) Read 0, 1, or 2 more bytes
     - 4) Execute
     - 5) Wait, count cycles, complete
-
-
-### Day 2: 14.02.2026
-
-- Learn Rust from ChatGPT
-- Implement more instructions
-- Add Web GUI for debugging 6502 emulator - it is not fully functional yet but accessible via: https://kunkelalexander.github.io/rustiNESs/
-    - I decided to compile the rust code using web assembly `wasm-pack build --target web --out-dir docs/pkg` and have ChatGPT write a GUI using JS/CSS/HTML. I really like this solution as it forces me to write a clean Rust interface and does not add unneccessary code to the emulator itself
-
-![alt text](figures/7.png)
-
-### Day 3: 16.02.2026
-- Finish implementing CPU instructions
-- Wire up Harte's test suite for testing all the operations: https://github.com/SingleStepTests/65x02/tree/main
-- `cargo test --release -- --nocapture`
-- Fails :/, that's for another day
-
-### Day 4: 21.02.2026
-- Switch from function pointers in lookup table to match statement with enum to avoid compiler warnings (and I personally also really dislike function pointers from C, I am sure this will also make debugging easier)
-- Work on making Harte's test suite pass with help from [Nesdev](https://www.nesdev.org/wiki/Instruction_reference) and ChatGPT
-    - It feel really good to see tens of thousands of test cases passing :) 
-- All Harte tests for legal operations pass now. I am very happy I chose to test my implementation because I did find a few bugs that would have been annoying to find otherwise. 
-- Update web interface to except byte code and to correctly load programs - it can now be used to test the emulator. Next up is Javid9x' second video. 
 
 
 ## Goals
