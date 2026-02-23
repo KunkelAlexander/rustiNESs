@@ -46,12 +46,12 @@ fn init_bus_from_state(bus: &mut Bus, state: &HarteState) {
     // Clear RAM
     // If your Bus has no "clear", brute force it:
     for addr in 0u16..=0xFFFF {
-        bus.write(addr, 0);
+        bus.write_cpu(addr, 0);
     }
 
     // Apply RAM patches
     for (addr, val) in &state.ram {
-        bus.write(*addr, *val);
+        bus.write_cpu(*addr, *val);
     }
 }
 
@@ -131,7 +131,7 @@ fn assert_cpu_matches(cpu: &Olc6502, expected: &HarteState, case_name: &str) {
 
 fn assert_ram_matches(bus: &Bus, expected: &HarteState, case_name: &str) {
     for (addr, expected_val) in &expected.ram {
-        let got = bus.read(*addr, true);
+        let got = bus.read_cpu(*addr, true);
         assert_eq!(
             got, *expected_val,
             "[{}] RAM mismatch at {:04X}: got {:02X}, expected {:02X}",

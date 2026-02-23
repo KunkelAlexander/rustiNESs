@@ -448,13 +448,13 @@ impl Olc6502 {
         // want to read the data at an address without changing the state of the
         // devices on the bus
         let read_only: bool = false;
-        bus.read(addr, read_only)
+        bus.read_cpu(addr, read_only)
     }
 
     // Writes a byte to the bus at the specified address
     pub fn write(&self, bus: &mut Bus, addr: u16, data: u8) {
 
-        bus.write(addr, data)
+        bus.write_cpu(addr, data)
     }
 
     
@@ -567,7 +567,7 @@ impl Olc6502 {
         // Only actually do work once enough time has passed
         if self.cycles == 0 {
             // Read one byte from bus containing the opcode
-            self.opcode = bus.read(self.pc, true);
+            self.opcode = bus.read_cpu(self.pc, true);
             self.set_flag(FLAG6502_U, true);
             self.pc = self.pc.wrapping_add(1);
 
