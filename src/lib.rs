@@ -1,15 +1,17 @@
 #![allow(dead_code, unused, unused_variables, unused_imports, unused_comparisons)]
 pub mod bus;
 pub mod cpu;
+pub mod interfaces;
 
 use wasm_bindgen::prelude::*;
-use crate::bus::Bus;
+use crate::interfaces::CpuBus;
+use crate::bus::SimpleBus;
 use crate::cpu::Olc6502;
 
 #[wasm_bindgen]
 pub struct Emulator {
     cpu: Olc6502,
-    bus: Bus,
+    bus: SimpleBus,
 }
 
 #[wasm_bindgen]
@@ -18,7 +20,7 @@ impl Emulator {
     pub fn new() -> Self {
         Self {
             cpu: Olc6502::new(),
-            bus: Bus::new(),
+            bus: SimpleBus::new(),
         }
     }
 
