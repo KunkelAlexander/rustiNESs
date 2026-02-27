@@ -4,7 +4,7 @@ pub mod cpu;
 pub mod interfaces;
 
 use wasm_bindgen::prelude::*;
-use crate::interfaces::CpuBus;
+use crate::interfaces::BusInterface;
 use crate::bus::SimpleBus;
 use crate::cpu::Olc6502;
 
@@ -40,11 +40,11 @@ impl Emulator {
     pub fn load_program(&mut self, bytes: &[u8], offset: u16) { 
         for (i, byte) in bytes.iter().enumerate() {
             let addr: u16 = offset.wrapping_add(i as u16);
-            self.bus.write_cpu(addr, *byte);
+            self.bus.write(addr, *byte);
         }
         // Set reset vector so CPU starts at offset
-        self.bus.write_cpu(0xFFFC, (offset & 0x00FF) as u8);
-        self.bus.write_cpu(0xFFFD, (offset >> 8) as u8);
+        self.bus.write(0xFFFC, (offset & 0x00FF) as u8);
+        self.bus.write(0xFFFD, (offset >> 8) as u8);
 
         self.cpu.reset(&mut self.bus);
     }
