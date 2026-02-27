@@ -1,8 +1,9 @@
-use crate::interfaces::{PpuBus};
+use crate::interfaces::{CartridgeInterface, PpuInterface};
 
 pub const SCREEN_W: usize = 256;
 pub const SCREEN_H: usize = 240;
 
+/*
 #[derive(Clone, Copy)]
 pub struct Colour {
     r: u8, 
@@ -78,52 +79,54 @@ pub const NES_PALETTE: [Colour; 64] = [
 	Colour { r: 160, g: 162, b: 160},
 	Colour { r: 0  , g: 0  , b: 0  },
 	Colour { r: 0  , g: 0  , b: 0  }
-];
+];*/
 
 pub struct Olc2c02 {
-    frame:      [u8; SCREEN_H * SCREEN_W], // Frame buffer
-    name_table: [u8; 2*1024],              // 2 KB of physical VRAM for the name tables
-    palette:    [u8; 32],                  // 32 Bytes physical VRAM for the palletes
-    pattern:    [u8; 2*4096],              // 8 KB of physical VRAM for the patterns
-    scanline:   u16, 
-    cycle:      u16, 
+    frame:          [u8; SCREEN_H * SCREEN_W], // Frame buffer
+    name_table:     [u8; 2*1024],              // 2 KB of physical VRAM for the name tables
+    palette:        [u8; 32],                  // 32 Bytes physical VRAM for the palletes
+    pattern:        [u8; 2*4096],              // 8 KB of physical VRAM for the patterns
+    scanline:       u16, 
+    cycle:          u16, 
+    frame_complete: bool
 
 }
 
 impl Olc2c02 {
 
     pub fn new() -> Self {
-        Self {
-            frame:      [0u8; SCREEN_H * SCREEN_W],
-            name_table: [0u8; 2*1024], 
-            palette:    [0u8; 32],
-            pattern:    [0u8; 2*4096],
-            scanline:   0, 
-            cycle:      0
+        Self {     
+            frame:           [0u8; SCREEN_H * SCREEN_W],
+            name_table:      [0u8; 2*1024], 
+            palette:         [0u8; 32],
+            pattern:         [0u8; 2*4096],
+            scanline:        0, 
+            cycle:           0,
+            frame_complete: false
         }
     }
 
-    pub fn set_pixel(&mut self, x: usize, y: usize) {
+    pub fn set_pixel(&mut self, x: usize, y: usize, colour: u8) {
         if x >= 0 && x < SCREEN_H  && y >= 0 && y <= SCREEN_W {
-            self.frame[y * SCREEN_W + x] = color;
+            self.frame[y * SCREEN_W + x] = colour;
         }
     }
     pub fn clock(&mut self)  {
         // Test noise
-        let color = if rand::random::<bool>() { 0x3F } else { 0x30 };
+        let c = ((self.cycle + self.scanline) & 1) as u8;
 
-        self.set_pixel(self.cycle - 1, self.scanline);
+        self.set_pixel((self.cycle - 1) as usize, self.scanline as usize, c);
         
         // This is weird NES stuff
-        // There are 341 PPU cycles per scaline
+        // There are 341 PPU cycles per scanline
         self.cycle += 1;
 
         if self.cycle >= 341 {
             self.cycle = 0;
-            self.scanline += 1;
+            self.scanline = self.scanline.wrapping_add(1);
 
             if self.scanline >= 261 {
-                self.scanline = -1;
+                self.scanline = 65535; // last value in u16 that wraps back to zero
                 self.frame_complete = true;
             }
         }
@@ -134,8 +137,8 @@ impl Olc2c02 {
 }
 
 
-impl PpuBus for Olc2c02 {
-    fn read_cpu(&self, addr: u16, _read_only: bool) -> u8 {
+impl PpuInterface for Olc2c02 {
+    fn read_cpu(&mut self, addr: u16, _read_only: bool) -> u8 {
         let mut data : u8 = 0x00;
         let data = match addr {
          0x0000 => 0x00, // Control
@@ -151,7 +154,7 @@ impl PpuBus for Olc2c02 {
         data
     }
 
-    fn write_cpu(&mut self, addr: u16, data: u8) {
+    fn write_cpu(&mut self, addr: u16, data: u8)  {
         match addr {
          0x0000 => 0x00, // Control
          0x0001 => 0x00, // Mask
@@ -166,14 +169,14 @@ impl PpuBus for Olc2c02 {
     }
 
     
-    fn read_ppu(&self, addr: u16, _read_only: bool, cartridge: &mut dyn CartridgeBus) -> u8 {
+    fn read_ppu(&self, addr: u16, cartridge: &mut dyn CartridgeInterface) -> Option<u8> {
         if let Some(data) = cartridge.read_cartridge(addr, read_only) {
             return data;
         }
 
         0
     }
-    fn write_ppu(&mut self, addr: u16, data: u8, cartridge: &mut dyn CartridgeBus) {
+    fn write_ppu(&mut self, addr: u16, data: u8, cartridge: &mut dyn CartridgeInterface) {
         addr &= 0x3FFF; 
 
         if cartridge.write_ppu(addr, data) {
