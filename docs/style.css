@@ -74,35 +74,31 @@ h1 {
   gap: clamp(12px, 2vw, 28px);
 }
 
-/* Desktop */
+
+/* Desktop: 3 columns */
 @media (min-width: 1201px) {
   .grid {
-    grid-template-columns:
-      minmax(600px, 1.2fr)
-      minmax(300px, 1fr)
-      minmax(300px, 0.9fr);
+    grid-template-columns: 1.2fr 1fr 0.9fr;
   }
 }
 
-/* Tablet */
-@media (max-width: 900px) {
+/* Tablet/Small Desktop: 2 columns */
+@media (max-width: 1200px) and (min-width: 851px) {
   .grid {
-    grid-template-columns: 
-    
-      minmax(600px, 1.2fr)
-      minmax(300px, 1fr);
+    grid-template-columns: 1.2fr 1fr;
   }
 }
 
-/* Phone */
-@media (max-width: 720px) {
+/* Mobile/Vertical Tablet: 1 column (Ensures NES is full width) */
+@media (max-width: 850px) {
   .grid {
     grid-template-columns: 1fr;
   }
 
   .topbar {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: center;
+    text-align: center;
   }
 }
 
@@ -249,27 +245,22 @@ button.primary {
 ========================================================= */
 
 .ram-wrap {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(500px, 700px);
+  display: flex;
+  flex-direction: column; /* Stack by default */
   gap: 16px;
-  align-items: start;
 }
 
-@media (max-width: 980px) {
+@media (min-width: 1100px) {
   .ram-wrap {
-    grid-template-columns: 1fr;
-  }
-
-  .learn {
-    border-left: none;
-    border-top: 1px solid var(--border);
-    padding-top: 12px;
+    flex-direction: row; /* Side-by-side only on large screens */
+    align-items: start;
   }
 }
 
 .ram-scroll {
   overflow-x: auto;
-  padding-bottom: 6px;
+  padding-bottom: 10px;
+  width: 100%; /* Ensure it stays within its parent */
 }
 
 .ram {
@@ -307,26 +298,54 @@ button.primary {
 body[data-mode="nes"] .mode-nes { display: block; }
 body[data-mode="cpu"] .mode-cpu { display: block; }
 
+/* 1. Force 1 column earlier to give NES room */
+@media (max-width: 1000px) {
+  .grid {
+    grid-template-columns: 1fr !important;
+    padding: 10px; /* Thinner margin on mobile */
+  }
+}
+
+/* 2. Remove card styling for NES mode on mobile to maximize size */
+@media (max-width: 600px) {
+  .card.mode-nes {
+    padding: 0;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+  }
+  
+  .tv {
+    border-radius: 0; /* Full-bleed look on mobile */
+    padding: 5px;
+  }
+}
+
+/* 3. Ensure the NES container can grow as much as the viewport allows */
 .mode-nes {
-  justify-self: center;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .tv {
   background: #fff;
-  padding: 10px;
+  padding: 12px;
   border-radius: 10px;
-  box-shadow:
-    inset 0 0 40px rgba(0,0,0,0.6),
-    0 12px 40px rgba(0,0,0,0.15);
-  display: flex;
-  justify-content: center;
-  
+  box-shadow: inset 0 0 40px rgba(0,0,0,0.6), 0 12px 40px rgba(0,0,0,0.15);
+  width: 100%;
+  max-width: 800px; /* Prevents it from becoming comically large on ultra-wide monitors */
 }
 
 #screen {
-  width: 512px;
-  height: 480px;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 256 / 240;
   image-rendering: pixelated;
-  background: black;
-  border-radius: 6px;
+  display: block;
+  background: #000;
 }
+/* allow grid items to shrink instead of forcing overflow */
+.grid > * { min-width: 0; }
+.card { min-width: 0; }

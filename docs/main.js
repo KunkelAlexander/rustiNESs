@@ -92,7 +92,7 @@ function renderRam() {
 
 
   function renderBlock(startAddr) {
-    for (let row = 0; row < 16; row++) {
+    for (let row = 0; row < 128; row++) {
       const base = startAddr + row * 16;
 
       // Row label
