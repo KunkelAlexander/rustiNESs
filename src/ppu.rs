@@ -87,8 +87,8 @@ pub struct Olc2c02 {
     pattern:        [u8; 2*4096],              // 8 KB of physical VRAM for the patterns
     scanline:       u16, 
     cycle:          u16, 
-    frame_complete: bool
-
+    pub frame_complete: bool,
+    noise_state: u32,
 }
 
 impl Olc2c02 {
@@ -100,12 +100,13 @@ impl Olc2c02 {
             pattern:         [0u8; 2*4096],
             scanline:        0, 
             cycle:           0,
-            frame_complete: false
+            frame_complete: false,
+            noise_state: 0x12345678,
         }
     }
 
     pub fn set_pixel(&mut self, x: usize, y: usize, colour: u8) {
-        if x >= 0 && x < SCREEN_H  && y >= 0 && y <= SCREEN_W {
+        if x < SCREEN_W  && y < SCREEN_H {
             self.frame[y * SCREEN_W + x] = colour;
         }
     }
@@ -113,9 +114,13 @@ impl Olc2c02 {
     
     pub fn clock(&mut self)  {
         // Test noise
-        let c = ((self.cycle + self.scanline) & 1) as u8;
+        self.noise_state ^= self.noise_state << 13;
+        self.noise_state ^= self.noise_state >> 17;
+        self.noise_state ^= self.noise_state << 5;
 
-        self.set_pixel((self.cycle - 1) as usize, self.scanline as usize, c);
+        let c = (self.noise_state & 0xFF) as u8;
+
+        self.set_pixel(self.cycle as usize, self.scanline as usize, c);
         
         // This is weird NES stuff
         // There are 341 PPU cycles per scanline
@@ -126,14 +131,10 @@ impl Olc2c02 {
             self.scanline = self.scanline.wrapping_add(1);
 
             if self.scanline >= 261 {
-                self.scanline = 65535; // last value in u16 that wraps back to zero
+                self.scanline = 0; // last value in u16 that wraps back to zero
                 self.frame_complete = true;
             }
         }
-    }
-
-    pub fn is_frame_complete(&self) -> bool {
-        self.frame_complete
     }
 
     pub fn get_frame_buffer(&self) -> Vec<u8> {

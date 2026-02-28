@@ -67,8 +67,8 @@ impl Bus {
         self.cpu_ram[start..end].to_vec()
     }
 
+    // Does not set RAM to zero
     pub fn reset(&mut self) {
-        self.cpu_ram              = [0u8; 2048];
     }
 
     pub fn insert_cartridge(&mut self, cartridge: Box<dyn CartridgeInterface>) {

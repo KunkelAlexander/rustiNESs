@@ -7,6 +7,11 @@ This project aims to incrementally emulate the original NES hardware, starting w
 ## Devlog
 
 ## Day 6: 28.02.2026
+
+- PPU now wired up in the web interface
+
+![](figures/11.png)
+
 - The hardest bit was for implementing video 3 was to decide how to wire up the different components to reduce dependencies
 - In my implementation, the Bus owns the RAM, the PPU and the cartridge, the CPU is by itself and the cartridge owns the mapper
 

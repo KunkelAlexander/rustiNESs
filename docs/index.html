@@ -3,17 +3,22 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>6502 Emulator Dashboard</title>
+    <title>NES Emulator Dashboard</title>
     <link rel="stylesheet" href="./style.css" />
   </head>
 
-  <body>
+  <body data-mode="nes">
     <header class="topbar">
       <div>
-        <h1>6502 Emulator</h1>
-        <p class="sub">JS/CSS/HTML GUI for rustiNESs 6502 emulator written in Rust based on javidx9's wonderful video</p>
+        <h1>rustiNESs</h1>
+        <p class="sub">NES emulator written in Rust based on javidx9's wonderful video</p>
       </div>
 
+      <div class="mode-switch">
+        <button data-mode="nes" class="active">NES Console</button>
+        <button data-mode="cpu">6052 Lab</button>
+      </div>
+    
       <div class="status">
         <span class="dot" id="statusDot"></span>
         <span id="statusText">Loading WASM…</span>
@@ -21,8 +26,7 @@
     </header>
 
     <main class="grid">
-      <!-- Assembler -->
-      <section class="card">
+      <section class="card mode-cpu">
         <h2>Program code</h2>
         <textarea id="asmInput" spellcheck="false">
 A9 42
@@ -36,6 +40,18 @@ A9 42
         </div>
       </section>
 
+      <section class="card mode-nes">
+        <div class="tv">
+            <canvas id="screen" width="256" height="240"></canvas>
+        </div>  
+
+        <div class="row">
+          <input type="file" id="romLoader" accept=".nes" hidden />
+          <button id="btnLoadROM" class="primary">Load ROM</button>
+        </div>
+      </section>
+
+
       <!-- Controls -->
       <section class="card">
         <h2>Controls</h2>
@@ -43,6 +59,8 @@ A9 42
         <div class="controls">
           <button id="btnStep" class="primary">Step Instruction</button>
           <button id="btnClock">Clock (1 cycle)</button>
+          <button id="btnRun">Run</button>
+          <button id="btnPause">Pause</button>
         </div>
 
         <div class="log" id="log"></div>
@@ -70,9 +88,9 @@ A9 42
 
         </div>
       </section>
-
+      
   <!-- RAM + Beginner Panel -->
-  <section class="card wide">
+  <section class="card wide mode-cpu">
     <h2>RAM</h2>
 
     <div class="ram-wrap">

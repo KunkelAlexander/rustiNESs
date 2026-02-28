@@ -1,8 +1,9 @@
 import init, { NES } from "./pkg/nes_emulator.js";
 
-let emu = null;
-let running = false;
+let emu       = null;
+let running   = false;
 let rafHandle = null;
+let mode      = "nes";
 
 // --- DOM helpers ---
 const $ = (id) => document.getElementById(id);
@@ -14,10 +15,25 @@ function log(msg) {
   el.scrollTop = el.scrollHeight;
 }
 
+// --- NES Canvas ---
+let ctx = null;
+let imageData = null;
+
+function initCanvas() {
+  const canvas = $("screen");
+  if (!canvas) return;
+
+  ctx = canvas.getContext("2d");
+  imageData = ctx.createImageData(256, 240);
+}
+
+// --- WASM availability ---
 function setStatus(ok, text) {
   $("statusDot").style.background = ok ? "#36d399" : "#ff5c7c";
   $("statusText").innerText = text;
 }
+
+// --- Debug window ---
 function formatStatusFlags(status) {
   const flags = [
     ["N", 7],
@@ -39,7 +55,6 @@ function formatStatusFlags(status) {
     .join(" ");
 }
 
-// --- UI updates ---
 function renderRegisters() {
   if (!emu) return;
 
@@ -121,15 +136,40 @@ function updateUI() {
   renderRam();
 }
 
-// --- Run loop ---
+function renderFrame() {
+  if (!emu || !ctx) return;
+
+  const frame = emu.frame(); // Vec<u8>
+
+  for (let i = 0; i < frame.length; i++) {
+    const c = frame[i] ;
+
+    // temporary grayscale palette
+    const color = c;
+
+    imageData.data[i * 4 + 0] = color;
+    imageData.data[i * 4 + 1] = color;
+    imageData.data[i * 4 + 2] = color;
+    imageData.data[i * 4 + 3] = 255;
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+}
+
 function frame() {
   if (!running) return;
 
-  const cycles = Number($("cyclesPerFrame").value || 1);
-
   try {
-    for (let i = 0; i < cycles; i++) {
-      emu.cpu_clock();
+    if (mode === "cpu") {
+      const cycles = Number($("cyclesPerFrame")?.value || 1);
+      for (let i = 0; i < cycles; i++) {
+        emu.cpu_clock();
+      }
+      updateUI();
+    } else {
+      emu.run_frame();
+      renderFrame();
+      updateUI(); // keep CPU debugger active
     }
   } catch (e) {
     running = false;
@@ -138,10 +178,8 @@ function frame() {
     return;
   }
 
-  updateUI();
   rafHandle = requestAnimationFrame(frame);
 }
-
 function startRun() {
   if (!emu) return;
   if (running) return;
@@ -157,6 +195,32 @@ function pauseRun() {
   log("Paused");
 }
 
+function switchMode(btn) {
+  mode = btn.dataset.mode;
+
+  // set body mode attribute (drives CSS visibility)
+  document.body.dataset.mode = mode;
+
+  // update active button styling
+  document.querySelectorAll(".mode-switch button")
+    .forEach(b => b.classList.remove("active"));
+
+  btn.classList.add("active");
+
+  if (mode == "nes") {
+    startRun();
+    log(`Switched to NES Console mode`);
+  } else {
+    pauseRun();
+    log(`Switched to 6502 Lab mode`);
+    loadProgram();
+  }
+
+
+
+
+}
+
 // --- Button wiring ---
 function bindUI() {
   $("btnReset").addEventListener("click", () => {
@@ -169,7 +233,12 @@ function bindUI() {
 
   $("btnClock").addEventListener("click", () => {
     if (!emu) return;
-    emu.clock();
+    if (mode === "cpu") {
+      emu.cpu_clock();
+    } else {
+      emu.clock();
+    }
+    renderFrame();
     updateUI();
     log("Clock()");
   });
@@ -178,6 +247,7 @@ function bindUI() {
     if (!emu) return;
 
     emu.step_instruction();
+    renderFrame();
     updateUI();
     log(`Step instruction()`);
   });
@@ -189,6 +259,30 @@ function bindUI() {
     loadProgram();
 
   });
+
+  $("btnRun").addEventListener("click", startRun);
+
+  $("btnPause").addEventListener("click", pauseRun);
+
+  $("btnLoadROM").addEventListener("click", () => {
+    $("romLoader").click();
+  });
+
+  $("romLoader").addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    await loadRomFile(file);
+  });
+
+
+
+  // --- Mode switch ---
+  document.querySelectorAll(".mode-switch button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      switchMode(btn);
+  });
+});
 }
 
 function loadProgram() {
@@ -205,8 +299,23 @@ function loadProgram() {
   }
 }
 
+async function loadRomFile(file) {
+  if (!emu) return;
+
+  pauseRun();
+
+  const arrayBuffer = await file.arrayBuffer();
+  const romBytes = new Uint8Array(arrayBuffer);
+
+  emu.insert_cartridge(romBytes);
+  emu.reset();
+
+  updateUI();
+  log(`Loaded ROM: ${file.name}`);
+}
+
 function parseHexProgram(text) {
-  // Remove comments
+  // Remove commentsF
   const cleaned = text
     .replace(/;.*/g, "")
     .replace(/[^0-9a-fA-F]/g, " ")
@@ -235,12 +344,13 @@ async function boot() {
     setStatus(true, "WASM loaded");
 
     bindUI();
+    initCanvas();
     updateUI();
 
     log("Emulator created");
     log("Ready.");
 
-    loadProgram();
+    startRun();
 
 
   } catch (e) {

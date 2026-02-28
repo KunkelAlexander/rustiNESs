@@ -27,13 +27,6 @@ export class NES {
         return v1;
     }
     /**
-     * @returns {boolean}
-     */
-    frame_ready() {
-        const ret = wasm.nes_frame_ready(this.__wbg_ptr);
-        return ret !== 0;
-    }
-    /**
      * @returns {Uint32Array}
      */
     get_cpu_state() {
@@ -90,6 +83,9 @@ export class NES {
     }
     reset() {
         wasm.nes_reset(this.__wbg_ptr);
+    }
+    run_frame() {
+        wasm.nes_run_frame(this.__wbg_ptr);
     }
     step_instruction() {
         wasm.nes_step_instruction(this.__wbg_ptr);

@@ -7,7 +7,6 @@ export class NES {
     clock(): void;
     cpu_clock(): void;
     frame(): Uint8Array;
-    frame_ready(): boolean;
     get_cpu_state(): Uint32Array;
     get_ram(start: number, len: number): Uint8Array;
     get_registers(): Uint32Array;
@@ -15,6 +14,7 @@ export class NES {
     load_program(bytes: Uint8Array, offset: number): void;
     constructor();
     reset(): void;
+    run_frame(): void;
     step_instruction(): void;
 }
 
@@ -26,7 +26,6 @@ export interface InitOutput {
     readonly nes_clock: (a: number) => void;
     readonly nes_cpu_clock: (a: number) => void;
     readonly nes_frame: (a: number) => [number, number];
-    readonly nes_frame_ready: (a: number) => number;
     readonly nes_get_cpu_state: (a: number) => [number, number];
     readonly nes_get_ram: (a: number, b: number, c: number) => [number, number];
     readonly nes_get_registers: (a: number) => [number, number];
@@ -34,6 +33,7 @@ export interface InitOutput {
     readonly nes_load_program: (a: number, b: number, c: number, d: number) => void;
     readonly nes_new: () => number;
     readonly nes_reset: (a: number) => void;
+    readonly nes_run_frame: (a: number) => void;
     readonly nes_step_instruction: (a: number) => void;
     readonly __wbindgen_externrefs: WebAssembly.Table;
     readonly __wbindgen_free: (a: number, b: number, c: number) => void;

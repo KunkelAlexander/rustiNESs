@@ -52,14 +52,18 @@ impl NES {
         self.system_clock_counter += 1;
     }
 
+    pub fn run_frame(&mut self) {
+        while !self.bus.ppu.frame_complete {
+            self.clock();  // advances PPU + CPU timing
+        }
+
+        self.bus.ppu.frame_complete = false;
+    }
+
     pub fn insert_cartridge(&mut self, cartridge_data: &[u8]) -> Result<(), String> {
         let cart = Cartridge::from_bytes(cartridge_data)?;
         self.bus.insert_cartridge(Box::new(cart));
         Ok(())
-    }
-
-    pub fn frame_ready(&self) -> bool {
-        self.bus.ppu.is_frame_complete()
     }
 
     pub fn frame(&self) -> Vec<u8> {
