@@ -6,7 +6,62 @@ This project aims to incrementally emulate the original NES hardware, starting w
 
 ## Devlog
 
-## Day 5: 23.03.2026
+## Day 6: 28.02.2026
+- The hardest bit was for implementing video 3 was to decide how to wire up the different components to reduce dependencies
+- In my implementation, the Bus owns the RAM, the PPU and the cartridge, the CPU is by itself and the cartridge owns the mapper
+
+```mermaid
+flowchart TD
+    Emulator
+    CPU
+    Bus
+    PPU
+    Cartridge
+
+    Emulator --> CPU
+    Emulator --> Bus
+    Bus --> PPU
+    Bus --> Cartridge
+```
+
+- I decided to implement the [Component pattern](https://gameprogrammingpatterns.com/component.html) via a number of Interfaces that expose the read and write functions of the different NES components
+
+```mermaid
+classDiagram
+
+    class BusInterface {
+        +read(addr, read_only) u8
+        +write(addr, data)
+    }
+
+    class PpuInterface {
+        +read_cpu(addr, read_only) u8
+        +write_cpu(addr, data)
+        +read_ppu(addr, cartridge) Option<u8>
+        +write_ppu(addr, data, cartridge)
+    }
+
+    class CartridgeInterface {
+        +read_cpu(addr) Option<u8>
+        +write_cpu(addr, data) Option<()>
+        +read_ppu(addr) Option<u8>
+        +write_ppu(addr, data) Option<()>
+    }
+
+    class MapperInterface {
+        +cpu_map_read(addr) Option<usize>
+        +cpu_map_write(addr, data) Option<usize>
+        +ppu_map_read(addr) Option<usize>
+        +ppu_map_write(addr, data) Option<usize>
+    }
+
+    BusInterface <|.. Bus
+    PpuInterface <|.. PPU
+    CartridgeInterface <|.. Cartridge
+    MapperInterface <|.. Mapper000
+```
+
+## Day 5: 23.02.2026
 - Watch [NES Emulator Part #3: Buses, RAMs, ROMs & Mappers](https://www.youtube.com/watch?v=xdzOvpYPmGE)
 
 - The RAM has 8 kB of addressable space but actually it's 8 kB mod 2kB - an idea called mirroring
@@ -21,6 +76,7 @@ This project aims to incrementally emulate the original NES hardware, starting w
 - The cartridge can contain many memory chips and the mapper maps addresses to the right memory location based on how it was configured by the CPU/PPU - This is why there where no loading times, it's just the addresses were mapped differently. 
 
 ![](figures/10.png)
+
 ### Day 4: 21.02.2026
 - Switch from function pointers in lookup table to match statement with enum to avoid compiler warnings (and I personally also really dislike function pointers from C, I am sure this will also make debugging easier)
 - Work on making Harte's test suite pass with help from [Nesdev](https://www.nesdev.org/wiki/Instruction_reference) and ChatGPT
@@ -144,8 +200,9 @@ Registers:
 
 
 ## Building
-wasm-pack build --target web --out-dir docs/pkg
 
+- WASM library for the web application:  `wasm-pack build --target web --out-dir docs/pkg`
+- Tests: `cargo test --release -- --nocapture`
 ## Current Status
 
 - [ ] CPU registers

@@ -4,6 +4,7 @@ pub mod cpu;
 pub mod interfaces;
 pub mod ppu; 
 pub mod cartridge; 
+pub mod mapper; 
 
 use wasm_bindgen::prelude::*;
 use crate::interfaces::BusInterface;

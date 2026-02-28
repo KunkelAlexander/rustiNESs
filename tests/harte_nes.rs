@@ -3,7 +3,8 @@ use std::path::Path;
 
 use serde::Deserialize;
 
-use nes_emulator::bus::Bus;
+use nes_emulator::interfaces::BusInterface;
+use nes_emulator::bus::SimpleBus;
 use nes_emulator::cpu::Olc6502;
 
 //
@@ -42,16 +43,16 @@ fn load_cases_from_file(path: &Path) -> Vec<HarteCase> {
         .unwrap_or_else(|e| panic!("Failed to parse JSON {}: {}", path.display(), e))
 }
 
-fn init_bus_from_state(bus: &mut Bus, state: &HarteState) {
+fn init_bus_from_state(bus: &mut SimpleBus, state: &HarteState) {
     // Clear RAM
     // If your Bus has no "clear", brute force it:
     for addr in 0u16..=0xFFFF {
-        bus.write_cpu(addr, 0);
+        bus.write(addr, 0);
     }
 
     // Apply RAM patches
     for (addr, val) in &state.ram {
-        bus.write_cpu(*addr, *val);
+        bus.write(*addr, *val);
     }
 }
 
@@ -75,7 +76,7 @@ fn set_cpu_from_state(cpu: &mut Olc6502, state: &HarteState) {
     cpu.force_cycles_zero();
 }
 
-fn run_one_instruction(cpu: &mut Olc6502, bus: &mut Bus) -> usize {
+fn run_one_instruction(cpu: &mut Olc6502, bus: &mut SimpleBus) -> usize {
     // Run cycles until the instruction finishes.
     // The most robust approach:
     // - tick once (starts instruction)
@@ -129,9 +130,9 @@ fn assert_cpu_matches(cpu: &Olc6502, expected: &HarteState, case_name: &str) {
     );
 }
 
-fn assert_ram_matches(bus: &Bus, expected: &HarteState, case_name: &str) {
+fn assert_ram_matches(bus: &mut SimpleBus, expected: &HarteState, case_name: &str) {
     for (addr, expected_val) in &expected.ram {
-        let got = bus.read_cpu(*addr, true);
+        let got = bus.read(*addr, true);
         assert_eq!(
             got, *expected_val,
             "[{}] RAM mismatch at {:04X}: got {:02X}, expected {:02X}",
@@ -158,7 +159,7 @@ fn run_opcode_file(filename : &str) {
 
 
     let mut cpu = Olc6502::new();
-    let mut bus = Bus::new();
+    let mut bus = SimpleBus::new();
 
     let opcode_file = path
         .file_name()
@@ -225,7 +226,7 @@ fn run_opcode_file(filename : &str) {
         assert_cpu_matches(&cpu, &case.final_state, &format!("{} case {} '{}'", opcode_file, i, case.name));
 
         // Validate final RAM state (only specified addresses)
-        assert_ram_matches(&bus, &case.final_state, &format!("{} case {} '{}'", opcode_file, i, case.name));
+        assert_ram_matches(&mut bus, &case.final_state, &format!("{} case {} '{}'", opcode_file, i, case.name));
     }
 }
 

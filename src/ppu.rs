@@ -3,7 +3,6 @@ use crate::interfaces::{CartridgeInterface, PpuInterface};
 pub const SCREEN_W: usize = 256;
 pub const SCREEN_H: usize = 240;
 
-/*
 #[derive(Clone, Copy)]
 pub struct Colour {
     r: u8, 
@@ -79,7 +78,7 @@ pub const NES_PALETTE: [Colour; 64] = [
 	Colour { r: 160, g: 162, b: 160},
 	Colour { r: 0  , g: 0  , b: 0  },
 	Colour { r: 0  , g: 0  , b: 0  }
-];*/
+];
 
 pub struct Olc2c02 {
     frame:          [u8; SCREEN_H * SCREEN_W], // Frame buffer
@@ -168,21 +167,12 @@ impl PpuInterface for Olc2c02 {
         };
     }
 
-    
     fn read_ppu(&self, addr: u16, cartridge: &mut dyn CartridgeInterface) -> Option<u8> {
-        if let Some(data) = cartridge.read_cartridge(addr, read_only) {
-            return data;
-        }
-
-        0
+        cartridge.read_ppu(addr & 0x3FFF)
     }
+
     fn write_ppu(&mut self, addr: u16, data: u8, cartridge: &mut dyn CartridgeInterface) {
-        addr &= 0x3FFF; 
-
-        if cartridge.write_ppu(addr, data) {
-
-        }
-        
+        cartridge.write_ppu(addr & 0x3FFF, data);
     }
 
 }

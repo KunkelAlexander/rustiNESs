@@ -79,7 +79,7 @@ impl Bus {
 impl BusInterface for Bus {
     fn read(&mut self, addr: u16, read_only: bool) -> u8 {
         // Cartridge gets first chance
-        if let Some(data) = self.cartridge.read_cpu(addr, read_only) {
+        if let Some(data) = self.cartridge.read_cpu(addr) {
             return data;
         }
         // System RAM (mirrored every 2 KB)
@@ -97,7 +97,7 @@ impl BusInterface for Bus {
     fn write(&mut self, addr: u16, data: u8) {
 
         // Cartridge gets first chance
-        if self.cartridge.write_cpu(addr, data) {
+        if self.cartridge.write_cpu(addr, data).is_some() {
         }
         // System RAM (mirrored every 2 KB)
         else if (addr >= 0x0000 && addr <= 0x1FFF)
