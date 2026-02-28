@@ -75,19 +75,22 @@ h1 {
 }
 
 /* Desktop */
-@media (min-width: 901px) {
+@media (min-width: 1201px) {
   .grid {
     grid-template-columns:
-      minmax(320px, 1.2fr)
-      minmax(280px, 1fr)
-      minmax(260px, 0.9fr);
+      minmax(600px, 1.2fr)
+      minmax(300px, 1fr)
+      minmax(300px, 0.9fr);
   }
 }
 
 /* Tablet */
 @media (max-width: 900px) {
   .grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 
+    
+      minmax(600px, 1.2fr)
+      minmax(300px, 1fr);
   }
 }
 
