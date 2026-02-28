@@ -1,24 +1,43 @@
 /* @ts-self-types="./nes_emulator.d.ts" */
 
-export class Emulator {
+export class NES {
     __destroy_into_raw() {
         const ptr = this.__wbg_ptr;
         this.__wbg_ptr = 0;
-        EmulatorFinalization.unregister(this);
+        NESFinalization.unregister(this);
         return ptr;
     }
     free() {
         const ptr = this.__destroy_into_raw();
-        wasm.__wbg_emulator_free(ptr, 0);
+        wasm.__wbg_nes_free(ptr, 0);
     }
     clock() {
-        wasm.emulator_clock(this.__wbg_ptr);
+        wasm.nes_clock(this.__wbg_ptr);
+    }
+    cpu_clock() {
+        wasm.nes_cpu_clock(this.__wbg_ptr);
+    }
+    /**
+     * @returns {Uint8Array}
+     */
+    frame() {
+        const ret = wasm.nes_frame(this.__wbg_ptr);
+        var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v1;
+    }
+    /**
+     * @returns {boolean}
+     */
+    frame_ready() {
+        const ret = wasm.nes_frame_ready(this.__wbg_ptr);
+        return ret !== 0;
     }
     /**
      * @returns {Uint32Array}
      */
     get_cpu_state() {
-        const ret = wasm.emulator_get_cpu_state(this.__wbg_ptr);
+        const ret = wasm.nes_get_cpu_state(this.__wbg_ptr);
         var v1 = getArrayU32FromWasm0(ret[0], ret[1]).slice();
         wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
         return v1;
@@ -29,7 +48,7 @@ export class Emulator {
      * @returns {Uint8Array}
      */
     get_ram(start, len) {
-        const ret = wasm.emulator_get_ram(this.__wbg_ptr, start, len);
+        const ret = wasm.nes_get_ram(this.__wbg_ptr, start, len);
         var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
         wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
         return v1;
@@ -38,10 +57,21 @@ export class Emulator {
      * @returns {Uint32Array}
      */
     get_registers() {
-        const ret = wasm.emulator_get_registers(this.__wbg_ptr);
+        const ret = wasm.nes_get_registers(this.__wbg_ptr);
         var v1 = getArrayU32FromWasm0(ret[0], ret[1]).slice();
         wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
         return v1;
+    }
+    /**
+     * @param {Uint8Array} cartridge_data
+     */
+    insert_cartridge(cartridge_data) {
+        const ptr0 = passArray8ToWasm0(cartridge_data, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.nes_insert_cartridge(this.__wbg_ptr, ptr0, len0);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
     }
     /**
      * @param {Uint8Array} bytes
@@ -50,28 +80,33 @@ export class Emulator {
     load_program(bytes, offset) {
         const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
         const len0 = WASM_VECTOR_LEN;
-        wasm.emulator_load_program(this.__wbg_ptr, ptr0, len0, offset);
+        wasm.nes_load_program(this.__wbg_ptr, ptr0, len0, offset);
     }
     constructor() {
-        const ret = wasm.emulator_new();
+        const ret = wasm.nes_new();
         this.__wbg_ptr = ret >>> 0;
-        EmulatorFinalization.register(this, this.__wbg_ptr, this);
+        NESFinalization.register(this, this.__wbg_ptr, this);
         return this;
     }
     reset() {
-        wasm.emulator_reset(this.__wbg_ptr);
+        wasm.nes_reset(this.__wbg_ptr);
     }
     step_instruction() {
-        wasm.emulator_step_instruction(this.__wbg_ptr);
+        wasm.nes_step_instruction(this.__wbg_ptr);
     }
 }
-if (Symbol.dispose) Emulator.prototype[Symbol.dispose] = Emulator.prototype.free;
+if (Symbol.dispose) NES.prototype[Symbol.dispose] = NES.prototype.free;
 
 function __wbg_get_imports() {
     const import0 = {
         __proto__: null,
         __wbg___wbindgen_throw_be289d5034ed271b: function(arg0, arg1) {
             throw new Error(getStringFromWasm0(arg0, arg1));
+        },
+        __wbindgen_cast_0000000000000001: function(arg0, arg1) {
+            // Cast intrinsic for `Ref(String) -> Externref`.
+            const ret = getStringFromWasm0(arg0, arg1);
+            return ret;
         },
         __wbindgen_init_externref_table: function() {
             const table = wasm.__wbindgen_externrefs;
@@ -89,9 +124,9 @@ function __wbg_get_imports() {
     };
 }
 
-const EmulatorFinalization = (typeof FinalizationRegistry === 'undefined')
+const NESFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
-    : new FinalizationRegistry(ptr => wasm.__wbg_emulator_free(ptr >>> 0, 1));
+    : new FinalizationRegistry(ptr => wasm.__wbg_nes_free(ptr >>> 0, 1));
 
 function getArrayU32FromWasm0(ptr, len) {
     ptr = ptr >>> 0;
@@ -129,6 +164,12 @@ function passArray8ToWasm0(arg, malloc) {
     getUint8ArrayMemory0().set(arg, ptr / 1);
     WASM_VECTOR_LEN = arg.length;
     return ptr;
+}
+
+function takeFromExternrefTable0(idx) {
+    const value = wasm.__wbindgen_externrefs.get(idx);
+    wasm.__externref_table_dealloc(idx);
+    return value;
 }
 
 let cachedTextDecoder = new TextDecoder('utf-8', { ignoreBOM: true, fatal: true });

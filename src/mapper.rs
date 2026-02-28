@@ -3,7 +3,6 @@ use serde_json::Map;
 use crate::interfaces::{MapperInterface};
 
 
-
 pub struct Mapper000 {
     pub prg_banks: u8,
     pub chr_banks: u8,

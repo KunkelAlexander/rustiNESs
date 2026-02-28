@@ -92,7 +92,6 @@ pub struct Olc2c02 {
 }
 
 impl Olc2c02 {
-
     pub fn new() -> Self {
         Self {     
             frame:           [0u8; SCREEN_H * SCREEN_W],
@@ -110,6 +109,8 @@ impl Olc2c02 {
             self.frame[y * SCREEN_W + x] = colour;
         }
     }
+    
+    
     pub fn clock(&mut self)  {
         // Test noise
         let c = ((self.cycle + self.scanline) & 1) as u8;
@@ -130,9 +131,14 @@ impl Olc2c02 {
             }
         }
     }
-    
 
-    
+    pub fn is_frame_complete(&self) -> bool {
+        self.frame_complete
+    }
+
+    pub fn get_frame_buffer(&self) -> Vec<u8> {
+        self.frame.to_vec()
+    }
 }
 
 
@@ -174,5 +180,6 @@ impl PpuInterface for Olc2c02 {
     fn write_ppu(&mut self, addr: u16, data: u8, cartridge: &mut dyn CartridgeInterface) {
         cartridge.write_ppu(addr & 0x3FFF, data);
     }
+
 
 }

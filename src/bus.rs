@@ -1,4 +1,5 @@
 use crate::interfaces::{CartridgeInterface, BusInterface, PpuInterface};
+use crate::ppu::Olc2c02;
 
 // SimpleBus only containing 64 KB of RAM used in 6502 demo
 pub struct SimpleBus {
@@ -44,19 +45,18 @@ impl BusInterface for SimpleBus {
 // NES bus containing 2 KB of RAM 
 pub struct Bus {
     cpu_ram:              [u8; 2048],
-    ppu:                  Box<dyn PpuInterface>,
+    pub ppu:              Olc2c02,
     cartridge:            Box<dyn CartridgeInterface>
 }
 
 impl Bus {
     pub fn new(
-        ppu: Box<dyn PpuInterface>,
         cartridge: Box<dyn CartridgeInterface>,
     ) -> Self {
         Self {
             cpu_ram: [0; 2048],
-            ppu,
-            cartridge
+            ppu: Olc2c02::new(),
+            cartridge: cartridge
         }
     }
 

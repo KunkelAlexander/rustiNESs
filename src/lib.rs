@@ -8,32 +8,62 @@ pub mod mapper;
 
 use wasm_bindgen::prelude::*;
 use crate::interfaces::BusInterface;
-use crate::bus::SimpleBus;
+use crate::bus::Bus;
 use crate::cpu::Olc6502;
+use crate::ppu::Olc2c02;
+use crate::cartridge::{EmptyCartridge, Cartridge};
 
 #[wasm_bindgen]
-pub struct Emulator {
+pub struct NES {
     cpu: Olc6502,
-    bus: SimpleBus,
+    bus: Bus,
+
+    system_clock_counter: u32,
 }
 
 #[wasm_bindgen]
-impl Emulator {
+impl NES {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         Self {
-            cpu: Olc6502::new(),
-            bus: SimpleBus::new(),
+            cpu:                  Olc6502::new(),
+            bus:                  Bus::new(Box::new(EmptyCartridge)),
+            system_clock_counter: 0
         }
     }
 
     pub fn reset(&mut self) {
         self.bus.reset();
         self.cpu.reset(&mut self.bus);
+        self.system_clock_counter = 0; 
+    }
+
+    pub fn cpu_clock(&mut self) {
+        self.cpu.clock(&mut self.bus);
     }
 
     pub fn clock(&mut self) {
-        self.cpu.clock(&mut self.bus);
+        self.bus.ppu.clock();
+
+        if self.system_clock_counter % 3 == 0 {
+            self.cpu.clock(&mut self.bus);
+        }
+
+        self.system_clock_counter += 1;
+    }
+
+    pub fn insert_cartridge(&mut self, cartridge_data: &[u8]) -> Result<(), String> {
+        let cart = Cartridge::from_bytes(cartridge_data)?;
+        self.bus.insert_cartridge(Box::new(cart));
+        Ok(())
+    }
+
+    pub fn frame_ready(&self) -> bool {
+        self.bus.ppu.is_frame_complete()
+    }
+
+    pub fn frame(&self) -> Vec<u8> {
+        self.bus.ppu.get_frame_buffer()
     }
 
     pub fn step_instruction(&mut self) { 

@@ -1,13 +1,17 @@
 /* tslint:disable */
 /* eslint-disable */
 
-export class Emulator {
+export class NES {
     free(): void;
     [Symbol.dispose](): void;
     clock(): void;
+    cpu_clock(): void;
+    frame(): Uint8Array;
+    frame_ready(): boolean;
     get_cpu_state(): Uint32Array;
     get_ram(start: number, len: number): Uint8Array;
     get_registers(): Uint32Array;
+    insert_cartridge(cartridge_data: Uint8Array): void;
     load_program(bytes: Uint8Array, offset: number): void;
     constructor();
     reset(): void;
@@ -18,18 +22,23 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
-    readonly __wbg_emulator_free: (a: number, b: number) => void;
-    readonly emulator_clock: (a: number) => void;
-    readonly emulator_get_cpu_state: (a: number) => [number, number];
-    readonly emulator_get_ram: (a: number, b: number, c: number) => [number, number];
-    readonly emulator_get_registers: (a: number) => [number, number];
-    readonly emulator_load_program: (a: number, b: number, c: number, d: number) => void;
-    readonly emulator_new: () => number;
-    readonly emulator_reset: (a: number) => void;
-    readonly emulator_step_instruction: (a: number) => void;
+    readonly __wbg_nes_free: (a: number, b: number) => void;
+    readonly nes_clock: (a: number) => void;
+    readonly nes_cpu_clock: (a: number) => void;
+    readonly nes_frame: (a: number) => [number, number];
+    readonly nes_frame_ready: (a: number) => number;
+    readonly nes_get_cpu_state: (a: number) => [number, number];
+    readonly nes_get_ram: (a: number, b: number, c: number) => [number, number];
+    readonly nes_get_registers: (a: number) => [number, number];
+    readonly nes_insert_cartridge: (a: number, b: number, c: number) => [number, number];
+    readonly nes_load_program: (a: number, b: number, c: number, d: number) => void;
+    readonly nes_new: () => number;
+    readonly nes_reset: (a: number) => void;
+    readonly nes_step_instruction: (a: number) => void;
     readonly __wbindgen_externrefs: WebAssembly.Table;
     readonly __wbindgen_free: (a: number, b: number, c: number) => void;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
+    readonly __externref_table_dealloc: (a: number) => void;
     readonly __wbindgen_start: () => void;
 }
 

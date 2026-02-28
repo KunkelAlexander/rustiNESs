@@ -163,18 +163,6 @@ classDiagram
 - Build a reasonably accurate (but readable) NES emulator
 - Keep the architecture modular and testable
 
-## Hardware Overview
-
-The NES consists of:
-- **CPU**: Ricoh RP2A03 (6502-compatible, no decimal mode)
-- **PPU**: Picture Processing Unit (graphics)
-- **APU**: Audio Processing Unit
-- **Cartridge**: PRG-ROM, CHR-ROM, mapper logic
-- **Controllers**
-
-The CPU communicates with all components via a shared **address bus**, **data bus**, and **read/write control**.
-
-
 ## Project Structure
 
 ```
@@ -183,21 +171,6 @@ src/
 ├── cpu.rs     # 6502 core (registers, execution)
 ```
 
-## CPU (6502)
-
-- 8-bit data bus
-- 16-bit address bus
-- Little-endian
-- No BCD (decimal) mode on the NES variant
-- Memory-mapped I/O
-
-Registers:
-- A (Accumulator)
-- X, Y (Index registers)
-- PC (Program Counter)
-- SP (Stack Pointer)
-- P (Status Flags)
-
 
 ## Building
 
@@ -205,9 +178,9 @@ Registers:
 - Tests: `cargo test --release -- --nocapture`
 ## Current Status
 
-- [ ] CPU registers
-- [ ] Memory bus
-- [ ] Instruction fetch/decode/execute
+- [x] CPU registers
+- [x] Memory bus
+- [x] Instruction fetch/decode/execute
 - [ ] Cycle accuracy
 - [ ] PPU
 - [ ] APU
@@ -217,4 +190,4 @@ Registers:
 
 ## License
 
-MIT
+[MIT](LICENSE)

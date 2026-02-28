@@ -1,4 +1,4 @@
-import init, { Emulator } from "./pkg/nes_emulator.js";
+import init, { NES } from "./pkg/nes_emulator.js";
 
 let emu = null;
 let running = false;
@@ -69,7 +69,7 @@ function renderRam() {
   const grid = $("ramGrid");
   grid.innerHTML = "";
 
-  const ram = emu.get_ram(0, 0x10000);
+  const ram = emu.get_ram(0, 0x00800); // Get 2 KB of RAM
 
   const [a, x, y, sp, pc, status] = emu.get_registers();
   const [fetched, addr_abs, addr_rel, opcode, cycles] = emu.get_cpu_state();
@@ -128,13 +128,8 @@ function frame() {
   const cycles = Number($("cyclesPerFrame").value || 1);
 
   try {
-    if (emu.run_cycles) {
-      emu.run_cycles(cycles);
-    } else {
-      // fallback if you don't have run_cycles yet
-      for (let i = 0; i < cycles; i++) {
-        emu.clock();
-      }
+    for (let i = 0; i < cycles; i++) {
+      emu.cpu_clock();
     }
   } catch (e) {
     running = false;
@@ -236,7 +231,7 @@ async function boot() {
     setStatus(false, "Loading WASM…");
     await init();
 
-    emu = new Emulator();
+    emu = new NES();
     setStatus(true, "WASM loaded");
 
     bindUI();

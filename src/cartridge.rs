@@ -23,6 +23,19 @@ struct INesHeader {
     tv_system2     : u8
 }
 
+//Represent NES without cartridge via empty cartridge
+pub struct EmptyCartridge;
+
+impl CartridgeInterface for EmptyCartridge {
+    fn read_cpu(&mut self, addr: u16) -> Option<u8>             {None}
+    fn write_cpu(&mut self, addr: u16, data: u8) -> Option<()>  {None}
+    fn read_ppu(&mut self, addr: u16) -> Option<u8>             {None}
+    fn write_ppu(&mut self, addr: u16, data: u8) -> Option<()>  {None}
+}
+
+
+
+
 pub struct Cartridge {
     v_prg_memory: Vec<u8>,
     v_chr_memory: Vec<u8>,
@@ -34,6 +47,7 @@ pub struct Cartridge {
 }
 
 impl Cartridge {
+
     pub fn from_bytes(data: &[u8]) -> Result<Self, String> {
         if data.len() < 16 {
             return Err("File too small".into())
