@@ -66,12 +66,12 @@ h1 {
 }
 
 .flag-on {
-  background: #2ecc71;
+  background: var(--accent);
   color: white;
 }
 
 .flag-off {
-  background: #e74c3c;
+  background: var(--muted);
   color: white;
   opacity: 0.6;
 }
@@ -240,22 +240,21 @@ button.primary {
 }
 
 /* Shared highlight base */
-.kv .k.highlight-pc,
-.kv .k.highlight-addr {
+.kv .highlight-pc,
+.kv .highlight-addr {
   font-weight: 600;
   transition: color 0.15s ease;
 }
 
 /* 🔵 PC */
-.kv .k.highlight-pc {
-  color: #0071e3; /* same blue family */
+.kv .highlight-pc {
+  color: var(--accent); /* same blue family */
 }
 
 /* 🟡 Effective address */
-.kv .k.highlight-addr {
+.kv .highlight-addr {
   color: #b27c00;
 }
-
 
 .k { color: var(--muted); }
 .v { font-weight: 500; }
@@ -370,22 +369,48 @@ body[data-mode="cpu"] .mode-cpu { display: block; }
   align-items: center;
 }
 
+
 .tv {
-  background: #fff;
-  padding: 12px;
-  border-radius: 10px;
-  box-shadow: inset 0 0 40px rgba(0,0,0,0.6), 0 12px 40px rgba(0,0,0,0.15);
   width: 100%;
-  max-width: 800px; /* Prevents it from becoming comically large on ultra-wide monitors */
+  max-width: 800px;
+  padding: 18px;
+  border-radius: 18px;
+
+  /* soft light shell */
+  background: linear-gradient(145deg, #f4f4f6, #e6e6ea);
+
+  /* gentle depth */
+  box-shadow:
+    inset 0 2px 4px rgba(255,255,255,0.8),
+    inset 0 -6px 12px rgba(0,0,0,0.08),
+    0 15px 35px rgba(0,0,0,0.08);
+
+  border: 1px solid rgba(0,0,0,0.06);
+}
+
+.power-led {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ff3b3b;
+  margin-top: 14px;
+
+  box-shadow:
+    0 0 10px #ff3b3b,
+    0 0 20px rgba(255,0,0,0.5);
 }
 
 #screen {
+  display: block;
   width: 100%;
-  height: auto;
   aspect-ratio: 256 / 240;
   image-rendering: pixelated;
-  display: block;
+
+  border-radius: 8px;
   background: #000;
+  box-shadow:
+    inset 0 0 30px rgba(0,0,0,0.9),
+    0 0 20px rgba(0,0,0,0.4);
 }
 /* allow grid items to shrink instead of forcing overflow */
 .grid > * { min-width: 0; }

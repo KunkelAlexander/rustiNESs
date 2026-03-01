@@ -43,6 +43,7 @@ A9 42
       <section class="card mode-nes">
         <div class="tv">
             <canvas id="screen" width="256" height="240"></canvas>
+            <div class="power-led"></div>
         </div>  
 
         <div class="row">
@@ -74,14 +75,14 @@ A9 42
             <div class="k">A</div><div class="v" id="a">--</div>
             <div class="k">X</div><div class="v" id="x">--</div>
             <div class="k">Y</div><div class="v" id="y">--</div>
-            <div class="k highlight-pc">PC</div><div class="v" id="pc">----</div>
+            <div class="k highlight-pc">PC</div><div class="v highlight-pc" id="pc">----</div>
             <div class="k">SP</div><div class="v" id="sp">--</div>
             <div class="k">STATUS</div><div class="v" id="status">--------</div>
 
             <hr style="grid-column: 1 / -1; opacity: 0.2; margin: 10px 0;">
 
             <div class="k">FETCHED</div><div class="v" id="fetched">--</div>
-            <div class="k highlight-addr">ADDR_ABS</div><div class="v" id="addr_abs">----</div>
+            <div class="k highlight-addr">ADDR_ABS</div><div class="v highlight-addr" id="addr_abs">----</div>
             <div class="k">ADDR_REL</div><div class="v" id="addr_rel">----</div>
             <div class="k">OPCODE</div><div class="v" id="opcode">--</div>
             <div class="k">CYCLES</div><div class="v" id="cycles">----</div>
