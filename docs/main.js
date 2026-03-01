@@ -161,15 +161,12 @@ function frame() {
 
   try {
     if (mode === "cpu") {
-      const cycles = Number($("cyclesPerFrame")?.value || 1);
-      for (let i = 0; i < cycles; i++) {
-        emu.cpu_clock();
-      }
+      emu.cpu_clock();
       updateUI();
     } else {
       emu.run_frame();
       renderFrame();
-      updateUI(); // keep CPU debugger active
+      updateUI();
     }
   } catch (e) {
     running = false;
