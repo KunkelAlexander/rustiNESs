@@ -6,6 +6,48 @@ This project aims to incrementally emulate the original NES hardware, starting w
 
 ## Devlog
 
+
+## Day 8: 02.04.2026
+- Finish background sprite implementation 
+
+## Day 7: 07.03.2026
+
+- Watch [NES Emulator Part #4: PPU - Background Rendering](https://www.youtube.com/watch?v=-THeUXqR3zY)
+
+- PPU has access to three memories 
+- 8 KB pattern memory for sprites stored as bitmaps
+- 4 KB name table containing the layout 
+- 1 KG palette for colours
+
+![](figures/12.png)
+
+- 8 KB pattern memory is split into 4 KB sections
+- They are split into 16x16 tiles
+- Each tile is 8x8 pixels
+- So each section is a 128x128 image 
+- We go via the mapper to access the pattern memory
+- The pattern can switch between sections for animations. 
+
+![](figures/13.png)
+
+- A tile is an 8x8 bitmap where each bit is actually represented by 2 bits = 4 colours
+- There are actually two bitplanes - the least-significant bit plane and the most-significant bit plane
+- They can be indexed with 
+
+![](figures/14.png)
+
+- The palette can be indexed efficiently, every row has three colours + transparent
+
+![](figures/15.png)
+
+- CPU talks to the PPU via eight registers, mirrored over a wide address range 
+
+![](figures/16.png)
+
+- CPU is setting up the PPU during the vertical blank period 
+
+![](figures/17.png)
+
 ## Day 6: 28.02.2026
 
 - PPU now wired up in the web interface

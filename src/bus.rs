@@ -67,6 +67,13 @@ impl Bus {
         self.cpu_ram[start..end].to_vec()
     }
 
+    
+    pub fn get_pattern_table(&mut self, i: u8, palette: u8) -> Vec<u8> {
+        self.ppu
+            .get_pattern_table(i, palette, self.cartridge.as_mut())
+            .to_vec()
+    }
+
     // Does not set RAM to zero
     pub fn reset(&mut self) {
     }

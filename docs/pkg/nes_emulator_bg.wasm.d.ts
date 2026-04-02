@@ -6,6 +6,7 @@ export const nes_clock: (a: number) => void;
 export const nes_cpu_clock: (a: number) => void;
 export const nes_frame: (a: number) => [number, number];
 export const nes_get_cpu_state: (a: number) => [number, number];
+export const nes_get_pattern_table: (a: number, b: number, c: number) => [number, number];
 export const nes_get_ram: (a: number, b: number, c: number) => [number, number];
 export const nes_get_registers: (a: number) => [number, number];
 export const nes_insert_cartridge: (a: number, b: number, c: number) => [number, number];

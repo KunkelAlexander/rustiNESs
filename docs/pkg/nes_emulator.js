@@ -36,6 +36,17 @@ export class NES {
         return v1;
     }
     /**
+     * @param {number} table
+     * @param {number} palette
+     * @returns {Uint8Array}
+     */
+    get_pattern_table(table, palette) {
+        const ret = wasm.nes_get_pattern_table(this.__wbg_ptr, table, palette);
+        var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v1;
+    }
+    /**
      * @param {number} start
      * @param {number} len
      * @returns {Uint8Array}

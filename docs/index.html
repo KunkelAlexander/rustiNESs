@@ -89,6 +89,38 @@ A9 42
 
         </div>
       </section>
+
+      <section class="card mode-nes">
+        <h2>PPU status</h2>
+
+        <div class="gpu-toolbar">
+          <label class="pattern-label" for="paletteSelect">
+            Palette
+            <select id="paletteSelect">
+              <option value="0">0</option>
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+              <option value="6">6</option>
+              <option value="7">7</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="pattern-grid">
+          <div class="pattern-card">
+            <div class="sub">Pattern Table 0</div>
+            <canvas id="pattern0" width="128" height="128"></canvas>
+          </div>
+
+          <div class="pattern-card">
+            <div class="sub">Pattern Table 1</div>
+            <canvas id="pattern1" width="128" height="128"></canvas>
+          </div>
+        </div>
+      </section>
       
   <!-- RAM + Beginner Panel -->
   <section class="card wide mode-cpu">

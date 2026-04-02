@@ -1,9 +1,12 @@
-use crate::interfaces::{CartridgeInterface, PpuInterface};
+use crate::{cartridge, interfaces::{CartridgeInterface, PpuInterface}};
 
 pub const SCREEN_W: usize = 256;
 pub const SCREEN_H: usize = 240;
 
-#[derive(Clone, Copy)]
+/*
+This, I handle in my web interface
+I feel like it is cleaner if we assign the palette elsewhere for now
+#[derive(Clone, Copy, Default)]
 pub struct Colour {
     r: u8, 
     g: u8, 
@@ -79,12 +82,15 @@ pub const NES_PALETTE: [Colour; 64] = [
 	Colour { r: 0  , g: 0  , b: 0  },
 	Colour { r: 0  , g: 0  , b: 0  }
 ];
+*/
 
 pub struct Olc2c02 {
-    frame:          [u8; SCREEN_H * SCREEN_W], // Frame buffer
-    name_table:     [u8; 2*1024],              // 2 KB of physical VRAM for the name tables
-    palette:        [u8; 32],                  // 32 Bytes physical VRAM for the palletes
-    pattern:        [u8; 2*4096],              // 8 KB of physical VRAM for the patterns
+    screen:                [u8; SCREEN_H*SCREEN_W],    // Frame buffer
+    table_name:            [u8; 2*1024],              // 2 KB of physical VRAM for the name tables
+    table_palette:         [u8; 32],                  // 32 Bytes physical VRAM for the palletes
+    table_pattern:         [u8; 2*4096],              // 8 KB of physical VRAM for the patterns
+    sprite_name_table:     [u8; SCREEN_H*SCREEN_W*2], // Helper for visualisation
+    sprite_pattern_table:  [u8; 128*128*2],       // Helper for visualisation
     scanline:       u16, 
     cycle:          u16, 
     pub frame_complete: bool,
@@ -94,10 +100,12 @@ pub struct Olc2c02 {
 impl Olc2c02 {
     pub fn new() -> Self {
         Self {     
-            frame:           [0u8; SCREEN_H * SCREEN_W],
-            name_table:      [0u8; 2*1024], 
-            palette:         [0u8; 32],
-            pattern:         [0u8; 2*4096],
+            screen:                 [0u8; SCREEN_H * SCREEN_W],
+            table_name:             [0u8; 2*1024], 
+            table_palette:          [0u8; 32],
+            table_pattern:          [0u8; 2*4096],    
+            sprite_name_table:      [0u8; SCREEN_H*SCREEN_W*2],
+            sprite_pattern_table:   [0u8; 128*128*2],
             scanline:        0, 
             cycle:           0,
             frame_complete: false,
@@ -107,9 +115,10 @@ impl Olc2c02 {
 
     pub fn set_pixel(&mut self, x: usize, y: usize, colour: u8) {
         if x < SCREEN_W  && y < SCREEN_H {
-            self.frame[y * SCREEN_W + x] = colour;
+            self.screen[y * SCREEN_W + x] = colour;
         }
     }
+
     
     
     pub fn clock(&mut self)  {
@@ -138,7 +147,7 @@ impl Olc2c02 {
     }
 
     pub fn get_frame_buffer(&self) -> Vec<u8> {
-        self.frame.to_vec()
+        self.screen.to_vec()
     }
 }
 
@@ -175,12 +184,121 @@ impl PpuInterface for Olc2c02 {
     }
 
     fn read_ppu(&self, addr: u16, cartridge: &mut dyn CartridgeInterface) -> Option<u8> {
-        cartridge.read_ppu(addr & 0x3FFF)
+        let mut addr = addr & 0x3FFF;
+
+        if let Some(data) = cartridge.read_ppu(addr) {
+            return Some(data);
+        } else if addr >= 0x0000 && addr <= 0x1FFF
+        {
+            // If the cartridge cant map the address, have
+            // a physical location ready here
+            let table = (addr & 0x1000) >> 12; // 0 or 1
+            let offset = addr & 0x0FFF;        // 0..4095
+            return Some(self.table_pattern[(table * 4096 + offset) as usize]);
+        }
+        else if addr >= 0x2000 && addr <= 0x3EFF
+        {
+            return None;
+        }
+        else if addr >= 0x3F00 && addr <= 0x3FFF
+        {
+            addr &= 0x001F;
+            if addr == 0x0010 {addr = 0x0000};
+            if addr == 0x0014 {addr = 0x0004};
+            if addr == 0x0018 {addr = 0x0008};
+            if addr == 0x001C {addr = 0x000C};
+            return Some(self.table_palette[addr as usize]);
+        }
+
+        None
+
     }
 
     fn write_ppu(&mut self, addr: u16, data: u8, cartridge: &mut dyn CartridgeInterface) {
-        cartridge.write_ppu(addr & 0x3FFF, data);
+        let mut addr = addr & 0x3FFF;
+
+        if let Some(_) = cartridge.write_ppu(addr & 0x3FFF, data) {
+
+        } else if addr >= 0x0000 && addr <= 0x1FFF
+        {
+            let table = (addr & 0x1000) >> 12; // 0 or 1
+            let offset = addr & 0x0FFF;        // 0..4095
+            self.table_pattern[(table * 4096 + offset) as usize] = data;
+        }
+        else if addr >= 0x2000 && addr <= 0x3EFF
+        {
+        }
+        else if addr >= 0x3F00 && addr <= 0x3FFF
+        {
+            addr &= 0x001F;
+            if addr == 0x0010 {addr = 0x0000;}
+            if addr == 0x0014 {addr = 0x0004;}
+            if addr == 0x0018 {addr = 0x0008;}
+            if addr == 0x001C {addr = 0x000C;}
+            self.table_palette[addr as usize] = data;
+        }
     }
 
+}
 
+impl Olc2c02 {
+
+    pub fn get_pattern_table(&mut self, i: u8, palette: u8, cartridge: &mut dyn CartridgeInterface) -> &[u8; 128*128*2] {
+        for n_tile_y in 0u16..16 {
+            for n_tile_x in 0u16..16 {
+                let n_offset = n_tile_y * 256u16 + n_tile_x * 16u16;
+
+                for row in 0u16..8 {
+                    let base = (i as u16) * 0x1000u16;
+
+                    let Some(mut tile_lsb) =
+                        self.read_ppu(base + n_offset + row + 0x0000u16, cartridge)
+                    else {
+                        continue;
+                    };
+
+                    let Some(mut tile_msb) =
+                        self.read_ppu(base + n_offset + row + 0x0008u16, cartridge)
+                    else {
+                        continue;
+                    };
+
+                    for col in 0..8 {
+                        // The tutorial code did not contain the bitshift, but during the review ChatGPT complained here
+                        // I am not yet able to assess which one is correct
+                        // I will run both and report back
+                        //let pixel = (tile_lsb & 0x01) + (tile_msb & 0x01); 
+                        let pixel = (tile_lsb & 0x01) | ((tile_msb & 0x01) << 1);
+                        tile_lsb >>= 1;
+                        tile_msb >>= 1; 
+
+                        let x: u16 = n_tile_x * 8 + (7 - col);
+                        let y: u16 = n_tile_y * 8 + row;
+                        let w: u16 = 128;
+                        let h: u16 = 128; 
+                        let s: u16 = w * h;
+
+                        // Map failed read to index 0
+                        let index = match self.get_colour_from_palette_ram(palette, pixel, cartridge) {
+                            Some(v) => v,
+                            None => 0,
+                        };
+
+                        self.sprite_pattern_table[( (i as u16) * s + x + y * w) as usize] = index; 
+                    }
+                }
+
+            }
+        }
+        
+        &self.sprite_pattern_table
+    }
+
+    
+	// This is a convenience function that takes a specified palette and pixel
+	// index and returns the appropriate screen colour.
+    fn get_colour_from_palette_ram(&self, palette: u8, pixel: u8, cartridge: &mut dyn CartridgeInterface) -> Option<u8> {
+        let addr = 0x3F00u16 + ((palette as u16) << 2) + pixel as u16;
+        self.read_ppu(addr, cartridge)
+    }
 }

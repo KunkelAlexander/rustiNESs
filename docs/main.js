@@ -19,12 +19,101 @@ function log(msg) {
 let ctx = null;
 let imageData = null;
 
+// Render pattern tables 
+let pattern0Ctx = null;
+let pattern1Ctx = null;
+let pattern0ImageData = null;
+let pattern1ImageData = null;
+
+const NES_PALETTE = [
+  [84, 84, 84],
+  [0, 30, 116],
+  [8, 16, 144],
+  [48, 0, 136],
+  [68, 0, 100],
+  [92, 0, 48],
+  [84, 4, 0],
+  [60, 24, 0],
+  [32, 42, 0],
+  [8, 58, 0],
+  [0, 64, 0],
+  [0, 60, 0],
+  [0, 50, 60],
+  [0, 0, 0],
+  [0, 0, 0],
+  [0, 0, 0],
+
+  [152, 150, 152],
+  [8, 76, 196],
+  [48, 50, 236],
+  [92, 30, 228],
+  [136, 20, 176],
+  [160, 20, 100],
+  [152, 34, 32],
+  [120, 60, 0],
+  [84, 90, 0],
+  [40, 114, 0],
+  [8, 124, 0],
+  [0, 118, 40],
+  [0, 102, 120],
+  [0, 0, 0],
+  [0, 0, 0],
+  [0, 0, 0],
+
+  [236, 238, 236],
+  [76, 154, 236],
+  [120, 124, 236],
+  [176, 98, 236],
+  [228, 84, 236],
+  [236, 88, 180],
+  [236, 106, 100],
+  [212, 136, 32],
+  [160, 170, 0],
+  [116, 196, 0],
+  [76, 208, 32],
+  [56, 204, 108],
+  [56, 180, 204],
+  [60, 60, 60],
+  [0, 0, 0],
+  [0, 0, 0],
+
+  [236, 238, 236],
+  [168, 204, 236],
+  [188, 188, 236],
+  [212, 178, 236],
+  [236, 174, 236],
+  [236, 174, 212],
+  [236, 180, 176],
+  [228, 196, 144],
+  [204, 210, 120],
+  [180, 222, 120],
+  [168, 226, 144],
+  [152, 226, 180],
+  [160, 214, 228],
+  [160, 162, 160],
+  [0, 0, 0],
+  [0, 0, 0],
+];
+
+
 function initCanvas() {
   const canvas = $("screen");
-  if (!canvas) return;
+  if (canvas) {
+    ctx = canvas.getContext("2d");
+    imageData = ctx.createImageData(256, 240);
+  }
 
-  ctx = canvas.getContext("2d");
-  imageData = ctx.createImageData(256, 240);
+  const p0 = $("pattern0");
+  if (p0) {
+    pattern0Ctx = p0.getContext("2d");
+    pattern0ImageData = pattern0Ctx.createImageData(128, 128);
+  }
+
+  const p1 = $("pattern1");
+  if (p1) {
+    pattern1Ctx = p1.getContext("2d");
+    pattern1ImageData = pattern1Ctx.createImageData(128, 128);
+  }
 }
 
 // --- WASM availability ---
@@ -139,21 +228,48 @@ function updateUI() {
 function renderFrame() {
   if (!emu || !ctx) return;
 
-  const frame = emu.frame(); // Vec<u8>
+  const frame = emu.frame();
 
   for (let i = 0; i < frame.length; i++) {
-    const c = frame[i] ;
+    const index = frame[i] & 0x3f;
+    const [r, g, b] = NES_PALETTE[index];
 
-    // temporary grayscale palette
-    const color = c;
-
-    imageData.data[i * 4 + 0] = color;
-    imageData.data[i * 4 + 1] = color;
-    imageData.data[i * 4 + 2] = color;
+    imageData.data[i * 4 + 0] = r;
+    imageData.data[i * 4 + 1] = g;
+    imageData.data[i * 4 + 2] = b;
     imageData.data[i * 4 + 3] = 255;
   }
 
   ctx.putImageData(imageData, 0, 0);
+}
+
+function renderPatternTableToCanvas(buffer, imageData, ctx) {
+  if (!buffer || !imageData || !ctx) return;
+
+  for (let i = 0; i < buffer.length; i++) {
+    const index = buffer[i] & 0x3f;
+    const [r, g, b] = NES_PALETTE[index];
+
+    imageData.data[i * 4 + 0] = r;
+    imageData.data[i * 4 + 1] = g;
+    imageData.data[i * 4 + 2] = b;
+    imageData.data[i * 4 + 3] = 255;
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+}
+
+function renderPatternTables() {
+  if (!emu) return;
+  if (!pattern0Ctx || !pattern1Ctx) return;
+
+  const palette = Number($("paletteSelect")?.value ?? 0);
+
+  const table0 = emu.get_pattern_table(0, palette);
+  const table1 = emu.get_pattern_table(1, palette);
+
+  renderPatternTableToCanvas(table0, pattern0ImageData, pattern0Ctx);
+  renderPatternTableToCanvas(table1, pattern1ImageData, pattern1Ctx);
 }
 
 function frame() {
@@ -166,6 +282,7 @@ function frame() {
     } else {
       emu.run_frame();
       renderFrame();
+      renderPatternTables();
       updateUI();
     }
   } catch (e) {
@@ -272,6 +389,10 @@ function bindUI() {
     await loadRomFile(file);
   });
 
+  $("paletteSelect")?.addEventListener("change", () => {
+    renderPatternTables();
+  });
+
 
 
   // --- Mode switch ---
@@ -290,6 +411,8 @@ function loadProgram() {
     emu.load_program(program, 0x0000);
 
     updateUI();
+    
+    renderPatternTables();
     log(`Loaded program of length ${program.length} bytes at $0000`);
   } catch (e) {
     log(`Parse error: ${e.message}`);
@@ -308,6 +431,8 @@ async function loadRomFile(file) {
   emu.reset();
 
   updateUI();
+  
+  renderPatternTables();
   log(`Loaded ROM: ${file.name}`);
 }
 

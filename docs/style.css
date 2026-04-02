@@ -260,6 +260,65 @@ button.primary {
 .v { font-weight: 500; }
 
 /* =========================================================
+   GPU toolbar
+========================================================= */
+
+.gpu-toolbar {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.pattern-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.pattern-label select {
+  border: 1px solid var(--border);
+  background: #fafafa;
+  color: var(--text);
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 14px;
+}
+
+.pattern-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.pattern-card {
+  min-width: 0;
+}
+
+.pattern-card .sub {
+  margin-bottom: 10px;
+}
+
+.pattern-grid canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  image-rendering: pixelated;
+  border-radius: 12px;
+  background: #000;
+  border: 1px solid var(--border);
+  box-shadow: inset 0 0 20px rgba(0,0,0,0.35);
+}
+
+@media (max-width: 520px) {
+  .pattern-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* =========================================================
    Log
 ========================================================= */
 
