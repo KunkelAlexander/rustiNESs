@@ -116,7 +116,7 @@ impl NES {
     }
 
 
-    pub fn get_pattern_table(&mut self, table: u8, palette: u8) -> Vec<u8> {
+    pub fn get_pattern_table(&self, table: u8, palette: u8) -> Vec<u8> {
         self.bus.get_pattern_table(table, palette)
     }
 }

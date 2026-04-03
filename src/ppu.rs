@@ -3,101 +3,69 @@ use crate::{cartridge, interfaces::{CartridgeInterface, PpuInterface}};
 pub const SCREEN_W: usize = 256;
 pub const SCREEN_H: usize = 240;
 
-/*
-This, I handle in my web interface
-I feel like it is cleaner if we assign the palette elsewhere for now
-#[derive(Clone, Copy, Default)]
-pub struct Colour {
-    r: u8, 
-    g: u8, 
-    b: u8
-}
-
-pub const NES_PALETTE: [Colour; 64] = [
-    Colour { r: 84 , g: 84,  b: 84 },
-	Colour { r: 0  , g: 30,  b: 116},
-	Colour { r: 8  , g: 16,  b: 144},
-	Colour { r: 48 , g: 0,   b: 136},
-	Colour { r: 68 , g: 0,   b: 100},
-	Colour { r: 92 , g: 0,   b: 48 },
-	Colour { r: 84 , g: 4,   b: 0  },
-	Colour { r: 60 , g: 24,  b: 0  },
-	Colour { r: 32 , g: 42,  b: 0  },
-	Colour { r: 8  , g: 58,  b: 0  },
-	Colour { r: 0  , g: 64,  b: 0  },
-	Colour { r: 0  , g: 60,  b: 0  },
-	Colour { r: 0  , g: 50,  b: 60 },
-	Colour { r: 0  , g: 0,   b: 0  },
-	Colour { r: 0  , g: 0,   b: 0  },
-	Colour { r: 0  , g: 0,   b: 0  },
- 
-	Colour { r: 152, g: 150, b: 152},
-	Colour { r: 8  , g: 76,  b: 196},
-	Colour { r: 48 , g: 50,  b: 236},
-	Colour { r: 92 , g: 30,  b: 228},
-	Colour { r: 136, g: 20,  b: 176},
-	Colour { r: 160, g: 20,  b: 100},
-	Colour { r: 152, g: 34,  b: 32 },
-	Colour { r: 120, g: 60,  b: 0  },
-	Colour { r: 84 , g: 90,  b: 0  },
-	Colour { r: 40 , g: 114, b: 0  },
-	Colour { r: 8  , g: 124, b: 0  },
-	Colour { r: 0  , g: 118, b: 40 },
-	Colour { r: 0  , g: 102, b: 120},
-	Colour { r: 0  , g: 0,   b: 0  },
-	Colour { r: 0  , g: 0,   b: 0  },
-	Colour { r: 0  , g: 0,   b: 0  },
-
-	Colour { r: 236, g: 238, b: 236},
-	Colour { r: 76 , g: 154, b: 236},
-	Colour { r: 120, g: 124, b: 236},
-	Colour { r: 176, g: 98,  b: 236},
-	Colour { r: 228, g: 84,  b: 236},
-	Colour { r: 236, g: 88,  b: 180},
-	Colour { r: 236, g: 106, b: 100},
-	Colour { r: 212, g: 136, b: 32 },
-	Colour { r: 160, g: 170, b: 0  },
-	Colour { r: 116, g: 196, b: 0  },
-	Colour { r: 76 , g: 208, b: 32 },
-	Colour { r: 56 , g: 204, b: 108},
-	Colour { r: 56 , g: 180, b: 204},
-	Colour { r: 60 , g: 60,  b: 60 },
-	Colour { r: 0  , g: 0,   b: 0  },
-	Colour { r: 0  , g: 0,   b: 0  },
-
-	Colour { r: 236, g: 238, b: 236},
-	Colour { r: 168, g: 204, b: 236},
-	Colour { r: 188, g: 188, b: 236},
-	Colour { r: 212, g: 178, b: 236},
-	Colour { r: 236, g: 174, b: 236},
-	Colour { r: 236, g: 174, b: 212},
-	Colour { r: 236, g: 180, b: 176},
-	Colour { r: 228, g: 196, b: 144},
-	Colour { r: 204, g: 210, b: 120},
-	Colour { r: 180, g: 222, b: 120},
-	Colour { r: 168, g: 226, b: 144},
-	Colour { r: 152, g: 226, b: 180},
-	Colour { r: 160, g: 214, b: 228},
-	Colour { r: 160, g: 162, b: 160},
-	Colour { r: 0  , g: 0  , b: 0  },
-	Colour { r: 0  , g: 0  , b: 0  }
-];
-*/
-
 pub struct Olc2c02 {
     screen:                [u8; SCREEN_H*SCREEN_W],    // Frame buffer
     table_name:            [u8; 2*1024],              // 2 KB of physical VRAM for the name tables
     table_palette:         [u8; 32],                  // 32 Bytes physical VRAM for the palletes
     table_pattern:         [u8; 2*4096],              // 8 KB of physical VRAM for the patterns
     sprite_name_table:     [u8; SCREEN_H*SCREEN_W*2], // Helper for visualisation
-    sprite_pattern_table:  [u8; 128*128*2],       // Helper for visualisation
     scanline:       u16, 
     cycle:          u16, 
     pub frame_complete: bool,
     noise_state: u32,
+    // registers
+    status: u8,
+    mask: u8,
+    control: u8,
+    loopy: u16,
+
+    address_latch: u8, 
+    ppu_data_buffer: u8, 
+    ppu_address: u16
 }
 
 impl Olc2c02 {
+    // =====================
+    // STATUS (0x2002)
+    // =====================
+    pub const STATUS_UNUSED: u8 = 0b0001_1111;
+    pub const STATUS_SPRITE_OVERFLOW: u8 = 1 << 5;
+    pub const STATUS_SPRITE_ZERO_HIT: u8 = 1 << 6;
+    pub const STATUS_VERTICAL_BLANK: u8 = 1 << 7;
+
+    // =====================
+    // MASK (0x2001)
+    // =====================
+    pub const MASK_GRAYSCALE: u8 = 1 << 0;
+    pub const MASK_RENDER_BACKGROUND_LEFT: u8 = 1 << 1;
+    pub const MASK_RENDER_SPRITES_LEFT: u8 = 1 << 2;
+    pub const MASK_RENDER_BACKGROUND: u8 = 1 << 3;
+    pub const MASK_RENDER_SPRITES: u8 = 1 << 4;
+    pub const MASK_ENHANCE_RED: u8 = 1 << 5;
+    pub const MASK_ENHANCE_GREEN: u8 = 1 << 6;
+    pub const MASK_ENHANCE_BLUE: u8 = 1 << 7;
+
+    // =====================
+    // CONTROL (0x2000)
+    // =====================
+    pub const CTRL_NAMETABLE_X: u8 = 1 << 0;
+    pub const CTRL_NAMETABLE_Y: u8 = 1 << 1;
+    pub const CTRL_INCREMENT_MODE: u8 = 1 << 2;
+    pub const CTRL_PATTERN_SPRITE: u8 = 1 << 3;
+    pub const CTRL_PATTERN_BACKGROUND: u8 = 1 << 4;
+    pub const CTRL_SPRITE_SIZE: u8 = 1 << 5;
+    pub const CTRL_SLAVE_MODE: u8 = 1 << 6;
+    pub const CTRL_ENABLE_NMI: u8 = 1 << 7;
+
+    // =====================
+    // LOOPY REGISTER (u16)
+    // =====================
+    pub const LOOPY_COARSE_X_MASK: u16 = 0b00000_00000_00000_11111;
+    pub const LOOPY_COARSE_Y_MASK: u16 = 0b00000_00000_11111_00000;
+    pub const LOOPY_NAMETABLE_X: u16 = 1 << 10;
+    pub const LOOPY_NAMETABLE_Y: u16 = 1 << 11;
+    pub const LOOPY_FINE_Y_MASK: u16 = 0b111 << 12;
+
     pub fn new() -> Self {
         Self {     
             screen:                 [0u8; SCREEN_H * SCREEN_W],
@@ -105,11 +73,17 @@ impl Olc2c02 {
             table_palette:          [0u8; 32],
             table_pattern:          [0u8; 2*4096],    
             sprite_name_table:      [0u8; SCREEN_H*SCREEN_W*2],
-            sprite_pattern_table:   [0u8; 128*128*2],
             scanline:        0, 
             cycle:           0,
-            frame_complete: false,
-            noise_state: 0x12345678,
+            frame_complete:  false,
+            noise_state:     0x12345678,
+            status:          0x00,
+            mask:            0x00,
+            control:         0x00,
+            loopy:           0x0000,
+            address_latch:   0x00, 
+            ppu_data_buffer: 0x00, 
+            ppu_address:     0x0000
         }
     }
 
@@ -153,37 +127,70 @@ impl Olc2c02 {
 
 
 impl PpuInterface for Olc2c02 {
-    fn read_cpu(&mut self, addr: u16, _read_only: bool) -> u8 {
-        let mut data : u8 = 0x00;
+    fn read_cpu(&mut self, addr: u16, _read_only: bool, cartridge: &mut dyn CartridgeInterface) -> u8 {
         let data = match addr {
          0x0000 => 0x00, // Control
          0x0001 => 0x00, // Mask
-         0x0002 => 0x00, // Status
+         0x0002 => {
+            
+            self.status |=  Olc2c02::STATUS_VERTICAL_BLANK;
+            let temp = (self.status & 0xE0) | (self.ppu_data_buffer & 0x1F);
+            self.status &= !Olc2c02::STATUS_VERTICAL_BLANK;
+            self.address_latch = 0; 
+            temp
+         }, // Status
          0x0003 => 0x00, // OAM Address
          0x0004 => 0x00, // OAM Data
          0x0005 => 0x00, // Scroll
          0x0006 => 0x00, // PPU Address
-         0x0007 => 0x00, // PPU Data
+         0x0007 => {
+            let temp = self.ppu_data_buffer;
+            self.ppu_data_buffer = self.read_ppu(self.ppu_address, cartridge).unwrap_or(0x00);;
+
+            if self.ppu_address > 0x3f00 {
+                self.ppu_data_buffer
+            } else {
+                temp
+            }
+         }, // PPU Data
          _      => 0x00,
         };
         data
     }
 
-    fn write_cpu(&mut self, addr: u16, data: u8)  {
+    fn write_cpu(&mut self, addr: u16, data: u8, cartridge: &mut dyn CartridgeInterface)  {
         match addr {
-         0x0000 => 0x00, // Control
-         0x0001 => 0x00, // Mask
-         0x0002 => 0x00, // Status
-         0x0003 => 0x00, // OAM Address
-         0x0004 => 0x00, // OAM Data
-         0x0005 => 0x00, // Scroll
-         0x0006 => 0x00, // PPU Address
-         0x0007 => 0x00, // PPU Data
-         _      => 0x00,
+        // Control
+         0x0000 => {
+            self.control = data;
+         }, 
+         // Mask
+         0x0001 => {
+            self.mask = data;
+         }, 
+         0x0002 => {}, // Status
+         0x0003 => {}, // OAM Address
+         0x0004 => {}, // OAM Data
+         0x0005 => {}, // Scroll
+         // PPU Address
+         0x0006 => {
+            if self.address_latch == 0 {
+                self.ppu_address = (self.ppu_address & 0x00FF) | ((data as u16) << 8); 
+                self.address_latch = 1;
+            } else {
+                self.ppu_address = (self.ppu_address & 0xFF00) | data as u16; 
+                self.address_latch = 0;
+            }
+         }, 
+         // PPU Data
+         0x0007 => {
+            self.write_ppu(self.ppu_address, data, cartridge);
+         }, 
+         _      => {},
         };
     }
 
-    fn read_ppu(&self, addr: u16, cartridge: &mut dyn CartridgeInterface) -> Option<u8> {
+    fn read_ppu(&self, addr: u16, cartridge: &dyn CartridgeInterface) -> Option<u8> {
         let mut addr = addr & 0x3FFF;
 
         if let Some(data) = cartridge.read_ppu(addr) {
@@ -243,7 +250,10 @@ impl PpuInterface for Olc2c02 {
 
 impl Olc2c02 {
 
-    pub fn get_pattern_table(&mut self, i: u8, palette: u8, cartridge: &mut dyn CartridgeInterface) -> &[u8; 128*128*2] {
+    pub fn get_pattern_table(&self, i: u8, palette: u8, cartridge: &dyn CartridgeInterface) -> Vec<u8> {
+        
+        let mut sprite_pattern_table = [0u8; 128*128];
+
         for n_tile_y in 0u16..16 {
             for n_tile_x in 0u16..16 {
                 let n_offset = n_tile_y * 256u16 + n_tile_x * 16u16;
@@ -275,29 +285,27 @@ impl Olc2c02 {
                         let x: u16 = n_tile_x * 8 + (7 - col);
                         let y: u16 = n_tile_y * 8 + row;
                         let w: u16 = 128;
-                        let h: u16 = 128; 
-                        let s: u16 = w * h;
-
+                        
                         // Map failed read to index 0
                         let index = match self.get_colour_from_palette_ram(palette, pixel, cartridge) {
                             Some(v) => v,
                             None => 0,
                         };
 
-                        self.sprite_pattern_table[( (i as u16) * s + x + y * w) as usize] = index; 
+                        sprite_pattern_table[(x + y * w) as usize] = index; 
                     }
                 }
 
             }
         }
         
-        &self.sprite_pattern_table
+        sprite_pattern_table.to_vec()
     }
 
     
 	// This is a convenience function that takes a specified palette and pixel
 	// index and returns the appropriate screen colour.
-    fn get_colour_from_palette_ram(&self, palette: u8, pixel: u8, cartridge: &mut dyn CartridgeInterface) -> Option<u8> {
+    fn get_colour_from_palette_ram(&self, palette: u8, pixel: u8, cartridge: &dyn CartridgeInterface) -> Option<u8> {
         let addr = 0x3F00u16 + ((palette as u16) << 2) + pixel as u16;
         self.read_ppu(addr, cartridge)
     }

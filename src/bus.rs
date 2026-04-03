@@ -68,10 +68,8 @@ impl Bus {
     }
 
     
-    pub fn get_pattern_table(&mut self, i: u8, palette: u8) -> Vec<u8> {
-        self.ppu
-            .get_pattern_table(i, palette, self.cartridge.as_mut())
-            .to_vec()
+    pub fn get_pattern_table(&self, i: u8, palette: u8) -> Vec<u8> {
+        self.ppu.get_pattern_table(i, palette, self.cartridge.as_ref())
     }
 
     // Does not set RAM to zero
@@ -97,7 +95,7 @@ impl BusInterface for Bus {
         // PPU Address range, mirrored every 8 bytes
         if (addr >= 0x2000 && addr <= 0x3FFF)
         {
-            return self.ppu.read_cpu(addr & 0x0007, read_only);
+            return self.ppu.read_cpu(addr & 0x0007, read_only, self.cartridge.as_mut());
         }
         0
     }
@@ -114,7 +112,7 @@ impl BusInterface for Bus {
         // PPU Address range, mirrored every 8 bytes
         if (addr >= 0x2000 && addr <= 0x3FFF)
         {
-            self.ppu.write_cpu(addr & 0x0007, data);
+            self.ppu.write_cpu(addr & 0x0007, data, self.cartridge.as_mut());
         }
         
     }

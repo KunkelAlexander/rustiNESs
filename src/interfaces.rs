@@ -6,10 +6,10 @@ pub trait BusInterface {
 
 
 pub trait PpuInterface { 
-    fn read_cpu (&mut self, addr: u16, _read_only: bool) -> u8; 
-    fn write_cpu(&mut self, addr: u16, data: u8); 
-    fn read_ppu (&    self, addr: u16,           cartridge: &mut dyn CartridgeInterface) -> Option<u8>; 
-    fn write_ppu(&mut self, addr: u16, data: u8, cartridge: &mut dyn CartridgeInterface); 
+    fn read_cpu (&mut self, addr: u16, _read_only: bool, cartridge: &mut dyn CartridgeInterface) -> u8; 
+    fn write_cpu(&mut self, addr: u16, data: u8,         cartridge: &mut dyn CartridgeInterface); 
+    fn read_ppu (&    self, addr: u16,                   cartridge: &    dyn CartridgeInterface) -> Option<u8>; 
+    fn write_ppu(&mut self, addr: u16, data: u8,         cartridge: &mut dyn CartridgeInterface); 
 }
 
 
@@ -17,7 +17,7 @@ pub trait PpuInterface {
 pub trait CartridgeInterface { 
     fn read_cpu (&mut self, addr: u16          ) -> Option<u8>; 
     fn write_cpu(&mut self, addr: u16, data: u8) -> Option<()>; 
-    fn read_ppu (&mut self, addr: u16          ) -> Option<u8>; 
+    fn read_ppu (&    self, addr: u16          ) -> Option<u8>; 
     fn write_ppu(&mut self, addr: u16, data: u8) -> Option<()>; 
 }
 
