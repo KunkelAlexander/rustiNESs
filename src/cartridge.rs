@@ -29,7 +29,7 @@ pub struct EmptyCartridge;
 impl CartridgeInterface for EmptyCartridge {
     fn read_cpu(&mut self, addr: u16) -> Option<u8>             {None}
     fn write_cpu(&mut self, addr: u16, data: u8) -> Option<()>  {None}
-    fn read_ppu(&mut self, addr: u16) -> Option<u8>             {None}
+    fn read_ppu(& self, addr: u16) -> Option<u8>             {None}
     fn write_ppu(&mut self, addr: u16, data: u8) -> Option<()>  {None}
 }
 
@@ -98,7 +98,12 @@ impl Cartridge {
 
             prg_memory = data[offset..offset+prg_size].to_vec();
             offset += prg_size;
-            chr_memory = data[offset..offset+chr_size].to_vec();
+            
+            chr_memory = if header.chr_rom_chunks == 0 {
+                vec![0; 8192] // CHR RAM
+            } else {
+                data[offset..offset + chr_size].to_vec()
+            };
 		} else  {
             return Err("Unsupported file type".into());
 		}
@@ -132,7 +137,7 @@ impl CartridgeInterface for Cartridge {
     fn write_cpu(&mut self, addr: u16, data: u8) -> Option<()> {
         self.mapper.cpu_map_write(addr, data).map(|mapped_addr| {self.v_prg_memory[mapped_addr] = data;})
     }
-    fn read_ppu(&mut self, addr: u16) -> Option<u8> {
+    fn read_ppu(&    self, addr: u16) -> Option<u8> {
         self.mapper.ppu_map_read( addr      ).map(|mapped_addr|  self.v_chr_memory[mapped_addr])
     }
     fn write_ppu(&mut self, addr: u16, data: u8) -> Option<()> {
