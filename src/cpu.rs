@@ -1176,7 +1176,7 @@ impl Olc6502 {
     fn cmp(&mut self, bus: &mut dyn BusInterface) -> u8 { 
         self.fetch(bus);
         // keep the borrow bit information by computing as u16
-        let temp: u16 = (self.a as u16) - (self.fetched  as u16); 
+        let temp: u16 = (self.a as u16).wrapping_sub(self.fetched as u16);
         self.set_flag(FLAG6502_C, self.a >= self.fetched);
         self.set_flag(FLAG6502_Z, temp & 0x00FF == 0x0000);
         self.set_flag(FLAG6502_N, temp & 0x0080 != 0x0000);
@@ -1188,7 +1188,7 @@ impl Olc6502 {
     // Flags Out:   N, C, Z
     fn cpx(&mut self, bus: &mut dyn BusInterface) -> u8 { 
         self.fetch(bus);
-        let temp: u16 = (self.x as u16) - (self.fetched  as u16); 
+        let temp: u16 = (self.x as u16).wrapping_sub(self.fetched as u16);
         self.set_flag(FLAG6502_C, self.x >= self.fetched);
         self.set_flag(FLAG6502_Z, temp & 0x00FF == 0x0000);
         self.set_flag(FLAG6502_N, temp & 0x0080 != 0x0000);
@@ -1202,7 +1202,7 @@ impl Olc6502 {
     // Flags Out:   N, C, Z
     fn cpy(&mut self, bus: &mut dyn BusInterface) -> u8 { 
         self.fetch(bus);
-        let temp: u16 = (self.y as u16) - (self.fetched  as u16); 
+        let temp: u16 = (self.y as u16).wrapping_sub(self.fetched as u16);
         self.set_flag(FLAG6502_C, self.y >= self.fetched);
         self.set_flag(FLAG6502_Z, temp & 0x00FF == 0x0000);
         self.set_flag(FLAG6502_N, temp & 0x0080 != 0x0000);
