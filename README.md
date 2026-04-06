@@ -8,7 +8,16 @@ This project aims to incrementally emulate the original NES hardware, starting w
 
 
 ## Day 8: 02.04.2026
-- Finish background sprite implementation 
+- Finish pattern table viewer 
+- To render stuff, the PPU needs three things: 
+    -  The pattern data at 0x000-0x1FFF stored in CHR (ROM or RAM) that defines whether a pixel is 0, 1, 2 or 3 
+    - The nametables which says which tiles go where at 0x2000 - 0x2FFF from PPU RAM
+    - The palette which stores what the colour indices 0, 1, 2, 3 actually mean stored at 0x3F00-0x3F1F in PPU palette RAM
+- The pattern data can be in the ROM file (CHR banks > 0). The PPU reads it directly from the cartridge. This is fast and many simple games use it, but the CPU cannot modify pattern data. 
+- the pattern memory can also be empty RAM and the CPU must upload graphics manually in that case - the CPU writes to $2006/2007 and then writes to PPU pattern RAM, this happens every frame during VBlank
+- Load `nestest.nes` from [Nesdev.org](https://www.nesdev.org/wiki/Emulator_tests) and show pattern table
+
+![](figures/18.png)
 
 ## Day 7: 07.03.2026
 

@@ -4,7 +4,7 @@ pub const SCREEN_W: usize = 256;
 pub const SCREEN_H: usize = 240;
 
 pub struct Olc2c02 {
-    screen:                [u8; SCREEN_H*SCREEN_W],    // Frame buffer
+    screen:                [u8; SCREEN_H*SCREEN_W],   // Frame buffer
     table_name:            [u8; 2*1024],              // 2 KB of physical VRAM for the name tables
     table_palette:         [u8; 32],                  // 32 Bytes physical VRAM for the palletes
     table_pattern:         [u8; 2*4096],              // 8 KB of physical VRAM for the patterns
@@ -123,16 +123,26 @@ impl Olc2c02 {
     pub fn get_frame_buffer(&self) -> Vec<u8> {
         self.screen.to_vec()
     }
+
+    fn ppu_addr_increment(&self) -> u16 {
+        if (self.control & Olc2c02::CTRL_INCREMENT_MODE) != 0 {
+            32
+        } else {
+            1
+        }
+    }
 }
 
 
 impl PpuInterface for Olc2c02 {
     fn read_cpu(&mut self, addr: u16, _read_only: bool, cartridge: &mut dyn CartridgeInterface) -> u8 {
+        
+        
+        println!("PPU CPU read {:04X}", addr);
         let data = match addr {
          0x0000 => 0x00, // Control
          0x0001 => 0x00, // Mask
          0x0002 => {
-            
             self.status |=  Olc2c02::STATUS_VERTICAL_BLANK;
             let temp = (self.status & 0xE0) | (self.ppu_data_buffer & 0x1F);
             self.status &= !Olc2c02::STATUS_VERTICAL_BLANK;
@@ -147,7 +157,10 @@ impl PpuInterface for Olc2c02 {
             let temp = self.ppu_data_buffer;
             self.ppu_data_buffer = self.read_ppu(self.ppu_address, cartridge).unwrap_or(0x00);;
 
-            if self.ppu_address > 0x3f00 {
+            
+            self.ppu_address = self.ppu_address.wrapping_add(self.ppu_addr_increment()) & 0x3FFF;
+
+            if self.ppu_address >= 0x3F00 {
                 self.ppu_data_buffer
             } else {
                 temp
@@ -159,6 +172,7 @@ impl PpuInterface for Olc2c02 {
     }
 
     fn write_cpu(&mut self, addr: u16, data: u8, cartridge: &mut dyn CartridgeInterface)  {
+        println!("PPU cpu_write reg {:04X} = {:02X}", addr, data);
         match addr {
         // Control
          0x0000 => {
@@ -185,6 +199,7 @@ impl PpuInterface for Olc2c02 {
          // PPU Data
          0x0007 => {
             self.write_ppu(self.ppu_address, data, cartridge);
+            self.ppu_address = self.ppu_address.wrapping_add(self.ppu_addr_increment()) & 0x3FFF;
          }, 
          _      => {},
         };
@@ -192,6 +207,9 @@ impl PpuInterface for Olc2c02 {
 
     fn read_ppu(&self, addr: u16, cartridge: &dyn CartridgeInterface) -> Option<u8> {
         let mut addr = addr & 0x3FFF;
+
+        
+        println!("PPU read {:04X}", addr);
 
         if let Some(data) = cartridge.read_ppu(addr) {
             return Some(data);
@@ -223,6 +241,8 @@ impl PpuInterface for Olc2c02 {
 
     fn write_ppu(&mut self, addr: u16, data: u8, cartridge: &mut dyn CartridgeInterface) {
         let mut addr = addr & 0x3FFF;
+        
+        println!("PPU write {:04X} = {:02X}", addr, data);
 
         if let Some(_) = cartridge.write_ppu(addr & 0x3FFF, data) {
 
@@ -237,11 +257,13 @@ impl PpuInterface for Olc2c02 {
         }
         else if addr >= 0x3F00 && addr <= 0x3FFF
         {
+            let raw = addr;
             addr &= 0x001F;
             if addr == 0x0010 {addr = 0x0000;}
             if addr == 0x0014 {addr = 0x0004;}
             if addr == 0x0018 {addr = 0x0008;}
             if addr == 0x001C {addr = 0x000C;}
+                    
             self.table_palette[addr as usize] = data;
         }
     }
@@ -286,10 +308,23 @@ impl Olc2c02 {
                         let y: u16 = n_tile_y * 8 + row;
                         let w: u16 = 128;
                         
+
+                        let gray = match pixel {
+                            0 => 0,
+                            1 => 85,
+                            2 => 170,
+                            3 => 255,
+                            _ => 0,
+                        };
+
                         // Map failed read to index 0
                         let index = match self.get_colour_from_palette_ram(palette, pixel, cartridge) {
-                            Some(v) => v,
-                            None => 0,
+                            Some(v) => {
+                                v
+                            },
+                            None => {
+                                0
+                            },
                         };
 
                         sprite_pattern_table[(x + y * w) as usize] = index; 

@@ -265,7 +265,10 @@ function renderPatternTables() {
 
   const palette = Number($("paletteSelect")?.value ?? 0);
 
+  log(`Getting PT 0 `, palette);
   const table0 = emu.get_pattern_table(0, palette);
+  
+  log(`Getting PT 1 `, palette);
   const table1 = emu.get_pattern_table(1, palette);
 
   renderPatternTableToCanvas(table0, pattern0ImageData, pattern0Ctx);
@@ -428,12 +431,15 @@ async function loadRomFile(file) {
   const romBytes = new Uint8Array(arrayBuffer);
 
   emu.insert_cartridge(romBytes);
+  log(`Loaded ROM: ${file.name}`);
   emu.reset();
+  log(`Reseted state`);
 
   updateUI();
+  log(`Updated UI`);
   
   renderPatternTables();
-  log(`Loaded ROM: ${file.name}`);
+  log(`Rendered pattern tables`);
 }
 
 function parseHexProgram(text) {
