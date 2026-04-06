@@ -49,6 +49,11 @@ impl NES {
             self.cpu.clock(&mut self.bus);
         }
 
+        if self.bus.ppu.nmi {
+            self.bus.ppu.nmi = false; 
+            self.cpu.nmi(&mut self.bus);
+        }
+
         self.system_clock_counter += 1;
     }
 

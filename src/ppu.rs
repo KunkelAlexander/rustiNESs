@@ -9,62 +9,64 @@ pub struct Olc2c02 {
     table_palette:         [u8; 32],                  // 32 Bytes physical VRAM for the palletes
     table_pattern:         [u8; 2*4096],              // 8 KB of physical VRAM for the patterns
     sprite_name_table:     [u8; SCREEN_H*SCREEN_W*2], // Helper for visualisation
-    scanline:       u16, 
-    cycle:          u16, 
-    pub frame_complete: bool,
-    noise_state: u32,
-    // registers
-    status: u8,
-    mask: u8,
-    control: u8,
-    loopy: u16,
+    scanline:               u16, 
+    cycle:                  u16, 
+    pub frame_complete:     bool,
+    noise_state:            u32,
 
-    address_latch: u8, 
-    ppu_data_buffer: u8, 
-    ppu_address: u16
+    // registers
+    status:                 u8,
+    mask:                   u8,
+    control:                u8,
+    loopy:                  u16,
+
+    address_latch:          u8, 
+    ppu_data_buffer:        u8, 
+    ppu_address:            u16,
+    pub nmi:                bool
 }
 
 impl Olc2c02 {
     // =====================
     // STATUS (0x2002)
     // =====================
-    pub const STATUS_UNUSED: u8 = 0b0001_1111;
-    pub const STATUS_SPRITE_OVERFLOW: u8 = 1 << 5;
-    pub const STATUS_SPRITE_ZERO_HIT: u8 = 1 << 6;
-    pub const STATUS_VERTICAL_BLANK: u8 = 1 << 7;
+    pub const STATUS_UNUSED:                u8 = 0b0001_1111;
+    pub const STATUS_SPRITE_OVERFLOW:       u8 = 1 << 5;
+    pub const STATUS_SPRITE_ZERO_HIT:       u8 = 1 << 6;
+    pub const STATUS_VERTICAL_BLANK:        u8 = 1 << 7;
 
     // =====================
     // MASK (0x2001)
     // =====================
-    pub const MASK_GRAYSCALE: u8 = 1 << 0;
-    pub const MASK_RENDER_BACKGROUND_LEFT: u8 = 1 << 1;
-    pub const MASK_RENDER_SPRITES_LEFT: u8 = 1 << 2;
-    pub const MASK_RENDER_BACKGROUND: u8 = 1 << 3;
-    pub const MASK_RENDER_SPRITES: u8 = 1 << 4;
-    pub const MASK_ENHANCE_RED: u8 = 1 << 5;
-    pub const MASK_ENHANCE_GREEN: u8 = 1 << 6;
-    pub const MASK_ENHANCE_BLUE: u8 = 1 << 7;
+    pub const MASK_GRAYSCALE:               u8 = 1 << 0;
+    pub const MASK_RENDER_BACKGROUND_LEFT:  u8 = 1 << 1;
+    pub const MASK_RENDER_SPRITES_LEFT:     u8 = 1 << 2;
+    pub const MASK_RENDER_BACKGROUND:       u8 = 1 << 3;
+    pub const MASK_RENDER_SPRITES:          u8 = 1 << 4;
+    pub const MASK_ENHANCE_RED:             u8 = 1 << 5;
+    pub const MASK_ENHANCE_GREEN:           u8 = 1 << 6;
+    pub const MASK_ENHANCE_BLUE:            u8 = 1 << 7;
 
     // =====================
     // CONTROL (0x2000)
     // =====================
-    pub const CTRL_NAMETABLE_X: u8 = 1 << 0;
-    pub const CTRL_NAMETABLE_Y: u8 = 1 << 1;
-    pub const CTRL_INCREMENT_MODE: u8 = 1 << 2;
-    pub const CTRL_PATTERN_SPRITE: u8 = 1 << 3;
-    pub const CTRL_PATTERN_BACKGROUND: u8 = 1 << 4;
-    pub const CTRL_SPRITE_SIZE: u8 = 1 << 5;
-    pub const CTRL_SLAVE_MODE: u8 = 1 << 6;
-    pub const CTRL_ENABLE_NMI: u8 = 1 << 7;
+    pub const CTRL_NAMETABLE_X:             u8 = 1 << 0;
+    pub const CTRL_NAMETABLE_Y:             u8 = 1 << 1;
+    pub const CTRL_INCREMENT_MODE:          u8 = 1 << 2;
+    pub const CTRL_PATTERN_SPRITE:          u8 = 1 << 3;
+    pub const CTRL_PATTERN_BACKGROUND:      u8 = 1 << 4;
+    pub const CTRL_SPRITE_SIZE:             u8 = 1 << 5;
+    pub const CTRL_SLAVE_MODE:              u8 = 1 << 6;
+    pub const CTRL_ENABLE_NMI:              u8 = 1 << 7;
 
     // =====================
     // LOOPY REGISTER (u16)
     // =====================
-    pub const LOOPY_COARSE_X_MASK: u16 = 0b00000_00000_00000_11111;
-    pub const LOOPY_COARSE_Y_MASK: u16 = 0b00000_00000_11111_00000;
-    pub const LOOPY_NAMETABLE_X: u16 = 1 << 10;
-    pub const LOOPY_NAMETABLE_Y: u16 = 1 << 11;
-    pub const LOOPY_FINE_Y_MASK: u16 = 0b111 << 12;
+    pub const LOOPY_COARSE_X_MASK:          u16 = 0b00000_00000_00000_11111;
+    pub const LOOPY_COARSE_Y_MASK:          u16 = 0b00000_00000_11111_00000;
+    pub const LOOPY_NAMETABLE_X:            u16 = 1 << 10;
+    pub const LOOPY_NAMETABLE_Y:            u16 = 1 << 11;
+    pub const LOOPY_FINE_Y_MASK:            u16 = 0b111 << 12;
 
     pub fn new() -> Self {
         Self {     
@@ -83,7 +85,8 @@ impl Olc2c02 {
             loopy:           0x0000,
             address_latch:   0x00, 
             ppu_data_buffer: 0x00, 
-            ppu_address:     0x0000
+            ppu_address:     0x0000,
+            nmi:             false
         }
     }
 
@@ -94,8 +97,24 @@ impl Olc2c02 {
     }
 
     
-    
+    // This advances the PPU
+    // Visible scanlines: 0 ... 239 
+    // Post-render: 240
+    // Vblank: 241...260
+    // Pre-render: 261 
+    // Javidx9 uses -1 for pre-render since he uses a signed integer
     pub fn clock(&mut self)  {
+
+        if self.scanline == 261 && self.cycle == 1 {
+            self.status &= !Olc2c02::STATUS_VERTICAL_BLANK;
+        }
+
+        if self.scanline == 241 && self.cycle == 1 {
+            self.status |= Olc2c02::STATUS_VERTICAL_BLANK;
+            if self.control & Olc2c02::CTRL_ENABLE_NMI != 0 {
+                self.nmi = true;
+            }
+        }
         // Test noise
         self.noise_state ^= self.noise_state << 13;
         self.noise_state ^= self.noise_state >> 17;
@@ -113,8 +132,8 @@ impl Olc2c02 {
             self.cycle = 0;
             self.scanline = self.scanline.wrapping_add(1);
 
-            if self.scanline >= 261 {
-                self.scanline = 0; // last value in u16 that wraps back to zero
+            if self.scanline >= 262 {
+                self.scanline = 0;
                 self.frame_complete = true;
             }
         }
@@ -136,14 +155,11 @@ impl Olc2c02 {
 
 impl PpuInterface for Olc2c02 {
     fn read_cpu(&mut self, addr: u16, _read_only: bool, cartridge: &mut dyn CartridgeInterface) -> u8 {
-        
-        
-        println!("PPU CPU read {:04X}", addr);
+    
         let data = match addr {
          0x0000 => 0x00, // Control
          0x0001 => 0x00, // Mask
          0x0002 => {
-            self.status |=  Olc2c02::STATUS_VERTICAL_BLANK;
             let temp = (self.status & 0xE0) | (self.ppu_data_buffer & 0x1F);
             self.status &= !Olc2c02::STATUS_VERTICAL_BLANK;
             self.address_latch = 0; 
@@ -154,13 +170,14 @@ impl PpuInterface for Olc2c02 {
          0x0005 => 0x00, // Scroll
          0x0006 => 0x00, // PPU Address
          0x0007 => {
-            let temp = self.ppu_data_buffer;
-            self.ppu_data_buffer = self.read_ppu(self.ppu_address, cartridge).unwrap_or(0x00);;
+            let temp         = self.ppu_data_buffer;
+            let addr        = self.ppu_address;
+            self.ppu_data_buffer = self.read_ppu(addr, cartridge).unwrap_or(0x00);;
 
-            
+            // Auto-increment for convenience - we rarely want to read/write the same location twice
             self.ppu_address = self.ppu_address.wrapping_add(self.ppu_addr_increment()) & 0x3FFF;
 
-            if self.ppu_address >= 0x3F00 {
+            if addr >= 0x3F00 {
                 self.ppu_data_buffer
             } else {
                 temp
@@ -172,7 +189,6 @@ impl PpuInterface for Olc2c02 {
     }
 
     fn write_cpu(&mut self, addr: u16, data: u8, cartridge: &mut dyn CartridgeInterface)  {
-        println!("PPU cpu_write reg {:04X} = {:02X}", addr, data);
         match addr {
         // Control
          0x0000 => {
@@ -199,6 +215,8 @@ impl PpuInterface for Olc2c02 {
          // PPU Data
          0x0007 => {
             self.write_ppu(self.ppu_address, data, cartridge);
+            
+            // Auto-increment for convenience - we rarely want to read/write the same location twice
             self.ppu_address = self.ppu_address.wrapping_add(self.ppu_addr_increment()) & 0x3FFF;
          }, 
          _      => {},
@@ -208,8 +226,6 @@ impl PpuInterface for Olc2c02 {
     fn read_ppu(&self, addr: u16, cartridge: &dyn CartridgeInterface) -> Option<u8> {
         let mut addr = addr & 0x3FFF;
 
-        
-        println!("PPU read {:04X}", addr);
 
         if let Some(data) = cartridge.read_ppu(addr) {
             return Some(data);
@@ -241,8 +257,7 @@ impl PpuInterface for Olc2c02 {
 
     fn write_ppu(&mut self, addr: u16, data: u8, cartridge: &mut dyn CartridgeInterface) {
         let mut addr = addr & 0x3FFF;
-        
-        println!("PPU write {:04X} = {:02X}", addr, data);
+
 
         if let Some(_) = cartridge.write_ppu(addr & 0x3FFF, data) {
 
@@ -299,8 +314,11 @@ impl Olc2c02 {
                         // The tutorial code did not contain the bitshift, but during the review ChatGPT complained here
                         // I am not yet able to assess which one is correct
                         // I will run both and report back
-                        //let pixel = (tile_lsb & 0x01) + (tile_msb & 0x01); 
-                        let pixel = (tile_lsb & 0x01) | ((tile_msb & 0x01) << 1);
+                        // let pixel = (tile_lsb & 0x01) + (tile_msb & 0x01); 
+                        // let pixel = (tile_lsb & 0x01) | ((tile_msb & 0x01) << 1);
+                        // Turns that we need the addition to get the right output
+
+                        let pixel = (tile_lsb & 0x01) + (tile_msb & 0x01); 
                         tile_lsb >>= 1;
                         tile_msb >>= 1; 
 
@@ -308,14 +326,6 @@ impl Olc2c02 {
                         let y: u16 = n_tile_y * 8 + row;
                         let w: u16 = 128;
                         
-
-                        let gray = match pixel {
-                            0 => 0,
-                            1 => 85,
-                            2 => 170,
-                            3 => 255,
-                            _ => 0,
-                        };
 
                         // Map failed read to index 0
                         let index = match self.get_colour_from_palette_ram(palette, pixel, cartridge) {
