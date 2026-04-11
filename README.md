@@ -6,6 +6,10 @@ This project aims to incrementally emulate the original NES hardware, starting w
 
 ## Devlog
 
+## Day 9: 11.04.2025
+- Fix bug in CPU NMI code 
+- Load `smb.nes` and show pattern table
+![](figures/19.png)
 
 ## Day 8: 02.04.2026
 - Finish pattern table viewer 
@@ -16,7 +20,6 @@ This project aims to incrementally emulate the original NES hardware, starting w
 - The pattern data can be in the ROM file (CHR banks > 0). The PPU reads it directly from the cartridge. This is fast and many simple games use it, but the CPU cannot modify pattern data. 
 - the pattern memory can also be empty RAM and the CPU must upload graphics manually in that case - the CPU writes to $2006/2007 and then writes to PPU pattern RAM, this happens every frame during VBlank
 - Load `nestest.nes` from [Nesdev.org](https://www.nesdev.org/wiki/Emulator_tests) and show pattern table
-
 ![](figures/18.png)
 
 ## Day 7: 07.03.2026
@@ -231,6 +234,7 @@ src/
 ## Building
 
 - WASM library for the web application:  `wasm-pack build --target web --out-dir docs/pkg`
+- Test with `python -m http.server`
 - Tests: `cargo test --release -- --nocapture`
 ## Current Status
 

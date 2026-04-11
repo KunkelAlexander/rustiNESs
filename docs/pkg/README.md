@@ -19,8 +19,6 @@ This project aims to incrementally emulate the original NES hardware, starting w
 
 ![](figures/18.png)
 
-- But SMB palette still does not show up correctly
-
 ## Day 7: 07.03.2026
 
 - Watch [NES Emulator Part #4: PPU - Background Rendering](https://www.youtube.com/watch?v=-THeUXqR3zY)
