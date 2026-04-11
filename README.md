@@ -9,12 +9,35 @@ This project aims to incrementally emulate the original NES hardware, starting w
 ## Day 9: 11.04.2025
 - Fix bug in CPU NMI code 
 - Load `smb.nes` and show pattern table
+
 ![](figures/19.png)
+
+- Background of the game is stored in a nametable - 32 x 32 bytes
+- Pattern memory is 16 x 16 tiles -> There are are 256 tiles we can put in a nametable location 
+- Each tile is 8x8 pixels, therefore the nametable contains 32x8 x 32x8 = 256 x 256 pixels
+- BUT not all rows of the nametable are used and the effective vertical resolution is 240
+- In its simplest form, the nametable contains a full vertical screen (e.g. DK)
+- SMB needs to scroll via the scroll register of the PPU
+
+![](figures/20.png)
+
+- The NES actually stores two nametables and we render from two nametables at the same time for scrolling with wrapping in two directions 
+- Actually, there are 4 nametables via mirroring
+- As you are scrolling in a given direction, the CPU needs to update the nametable
+
+- At the bottom of the nametable, there are 64 attribute bytes - we get one byte for every every 8x8 tiles and they specify the palette for every 2x2 tiles
+
+
+![](figures/21.png)
+
+- Let's dive right in: We fill in the PPU code for reading and writing to 0x2000 - 0x2FFF from PPU RAM: In my implementation, the cartridge decides how to map addresses to the name table based on the mirror flag. We can output the first nametable for the nestest ROM  as text:
+
+![](figures/22.png)
 
 ## Day 8: 02.04.2026
 - Finish pattern table viewer 
 - To render stuff, the PPU needs three things: 
-    -  The pattern data at 0x000-0x1FFF stored in CHR (ROM or RAM) that defines whether a pixel is 0, 1, 2 or 3 
+    - The pattern data at 0x000-0x1FFF stored in CHR (ROM or RAM) that defines whether a pixel is 0, 1, 2 or 3 
     - The nametables which says which tiles go where at 0x2000 - 0x2FFF from PPU RAM
     - The palette which stores what the colour indices 0, 1, 2, 3 actually mean stored at 0x3F00-0x3F1F in PPU palette RAM
 - The pattern data can be in the ROM file (CHR banks > 0). The PPU reads it directly from the cartridge. This is fast and many simple games use it, but the CPU cannot modify pattern data. 
@@ -28,7 +51,7 @@ This project aims to incrementally emulate the original NES hardware, starting w
 
 - PPU has access to three memories 
 - 8 KB pattern memory for sprites stored as bitmaps
-- 4 KB name table containing the layout 
+- 4 KB nametable containing the layout 
 - 1 KG palette for colours
 
 ![](figures/12.png)

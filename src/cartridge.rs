@@ -29,8 +29,9 @@ pub struct EmptyCartridge;
 impl CartridgeInterface for EmptyCartridge {
     fn read_cpu(&mut self, addr: u16) -> Option<u8>             {None}
     fn write_cpu(&mut self, addr: u16, data: u8) -> Option<()>  {None}
-    fn read_ppu(& self, addr: u16) -> Option<u8>             {None}
+    fn read_ppu(& self, addr: u16) -> Option<u8>                {None}
     fn write_ppu(&mut self, addr: u16, data: u8) -> Option<()>  {None}
+    fn map_nametable_addr(&self, addr: u16) -> u16              {0}
 }
 
 
@@ -142,6 +143,31 @@ impl CartridgeInterface for Cartridge {
     }
     fn write_ppu(&mut self, addr: u16, data: u8) -> Option<()> {
         self.mapper.ppu_map_write(addr, data).map(|mapped_addr| {self.v_chr_memory[mapped_addr] = data;})
+    }
+
+    // This takes an input address in the range 0x2000 to 0x3EFF and maps it to the appropriate address in the name table based
+    // on the mirroring mode
+    // I represent the two nametables as a 2*1024 byte array - we therefore need to offset by 1024 = 0x0400 to get to the second nametable (page 1)
+    fn map_nametable_addr(&self, addr: u16) -> u16 {
+        let offset = addr & 0x0FFF;
+        match self.mirror {
+            MIRROR::Vertical => match offset {
+                0x0000..=0x03FF =>         offset & 0x03FF,    // NT0 -> page 0
+                0x0400..=0x07FF => 1024 + (offset & 0x03FF),   // NT1 -> page 1
+                0x0800..=0x0BFF =>         offset & 0x03FF,    // NT2 -> page 0
+                0x0C00..=0x0FFF => 1024 + (offset & 0x03FF),   // NT3 -> page 1
+                _ => unreachable!(),
+            },
+            MIRROR::Horizontal => match offset {
+                0x0000..=0x03FF =>         offset & 0x03FF,    // NT0 -> page 0
+                0x0400..=0x07FF =>         offset & 0x03FF,    // NT1 -> page 0
+                0x0800..=0x0BFF => 1024 + (offset & 0x03FF),   // NT2 -> page 1
+                0x0C00..=0x0FFF => 1024 + (offset & 0x03FF),   // NT3 -> page 1
+                _ => unreachable!(),
+            },
+            MIRROR::OnescreenLo =>         offset & 0x03FF,    // all -> page 0
+            MIRROR::OnescreenHi => 1024 + (offset & 0x03FF),   // all -> page 1
+        }
     }
 }
 

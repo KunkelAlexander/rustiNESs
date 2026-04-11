@@ -72,6 +72,9 @@ impl Bus {
         self.ppu.get_pattern_table(i, palette, self.cartridge.as_ref())
     }
 
+    pub fn get_name_table(&self) -> Vec<u8> {
+        self.ppu.get_name_table()
+    }
     // Does not set RAM to zero
     pub fn reset(&mut self) {
     }

@@ -205,7 +205,7 @@ impl PpuInterface for Olc2c02 {
          // PPU Address
          0x0006 => {
             if self.address_latch == 0 {
-                self.ppu_address = (self.ppu_address & 0x00FF) | ((data as u16) << 8); 
+                self.ppu_address = (self.ppu_address & 0x00FF) | (((data & 0x3F) as u16) << 8); 
                 self.address_latch = 1;
             } else {
                 self.ppu_address = (self.ppu_address & 0xFF00) | data as u16; 
@@ -239,7 +239,9 @@ impl PpuInterface for Olc2c02 {
         }
         else if addr >= 0x2000 && addr <= 0x3EFF
         {
-            return None;
+            // cartridge handles mirroring
+            return Some(self.table_name[cartridge.map_nametable_addr(addr) as usize])
+            
         }
         else if addr >= 0x3F00 && addr <= 0x3FFF
         {
@@ -269,6 +271,8 @@ impl PpuInterface for Olc2c02 {
         }
         else if addr >= 0x2000 && addr <= 0x3EFF
         {
+            // cartridge handles mirroring
+            self.table_name[cartridge.map_nametable_addr(addr) as usize] = data;
         }
         else if addr >= 0x3F00 && addr <= 0x3FFF
         {
@@ -286,6 +290,10 @@ impl PpuInterface for Olc2c02 {
 }
 
 impl Olc2c02 {
+
+    pub fn get_name_table(&self) -> Vec<u8> {
+        self.table_name[..1024].to_vec()
+    }
 
     pub fn get_pattern_table(&self, i: u8, palette: u8, cartridge: &dyn CartridgeInterface) -> Vec<u8> {
         
