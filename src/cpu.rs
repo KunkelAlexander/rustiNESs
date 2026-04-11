@@ -107,6 +107,26 @@ pub enum AddressMode {
     REL,
 }
 
+// Add len function for tracing and disassembly
+impl AddressMode {
+    pub fn len(self) -> u16 {
+        match self {
+            AddressMode::IMP => 1,
+            AddressMode::IMM => 2,
+            AddressMode::ZP0 => 2,
+            AddressMode::ZPX => 2,
+            AddressMode::ZPY => 2,
+            AddressMode::IZX => 2,
+            AddressMode::IZY => 2,
+            AddressMode::REL => 2,
+            AddressMode::ABS => 3,
+            AddressMode::ABX => 3,
+            AddressMode::ABY => 3,
+            AddressMode::IND => 3,
+        }
+    }
+}
+
 
 // Javid9x' code compares function pointers to determine the addressing mode
 // I think it would be nicer to store integers in the instruction table and compare these
@@ -414,6 +434,9 @@ pub struct Olc6502 {
     addr_rel : u16,
     opcode   : u8, 
     cycles   : u8,
+
+    // debugging
+    trace_enabled : bool
 }
 
 
@@ -435,6 +458,8 @@ impl Olc6502 {
             addr_rel: 0, 
             opcode:   0,
             cycles:   0,
+
+            trace_enabled: true
         }
     }
 
@@ -451,8 +476,59 @@ impl Olc6502 {
 
     // Writes a byte to the bus at the specified address
     pub fn write(&self, bus: &mut dyn BusInterface, addr: u16, data: u8) {
-
         bus.write(addr, data)
+    }
+
+    // Print debug trace 
+    // 1. Read current opcode from RAM
+    // 2. Look up instruction
+    // 3. Check the two bytes following the instruction
+    // 4. Print pc location, length of instruction, name, arguments of instruction and CPU state for debuggig
+    pub fn trace(&self, bus: &mut dyn BusInterface) -> String {
+        let opcode        = self.read(bus, self.pc);
+        let inst = LOOKUP[opcode as usize];
+
+        let b1 = self.read(bus,self.pc.wrapping_add(1));
+        let b2 = self.read(bus,self.pc.wrapping_add(2));
+
+        let bytes = match inst.addrmode.len() {
+            1 => format!("{:02X}      ", opcode),
+            2 => format!("{:02X} {:02X}   ", opcode, b1),
+            3 => format!("{:02X} {:02X} {:02X}", opcode, b1, b2),
+            _ => unreachable!(),
+        };
+
+        let operand = match inst.addrmode {
+            AddressMode::IMP => "".to_string(),
+            AddressMode::IMM => format!("#${:02X}", b1),
+            AddressMode::ZP0 => format!("${:02X}", b1),
+            AddressMode::ZPX => format!("${:02X},X", b1),
+            AddressMode::ZPY => format!("${:02X},Y", b1),
+            AddressMode::ABS => format!("${:04X}", (b2 as u16) << 8 | b1 as u16),
+            AddressMode::ABX => format!("${:04X},X", (b2 as u16) << 8 | b1 as u16),
+            AddressMode::ABY => format!("${:04X},Y", (b2 as u16) << 8 | b1 as u16),
+            AddressMode::IND => format!("(${:04X})", (b2 as u16) << 8 | b1 as u16),
+            AddressMode::IZX => format!("(${:02X},X)", b1),
+            AddressMode::IZY => format!("(${:02X}),Y", b1),
+            AddressMode::REL => {
+                let offset = b1 as i8;
+                let target = self.pc.wrapping_add(2).wrapping_add(offset as u16);
+                format!("${:04X}", target)
+            }
+        };
+
+        format!(
+            "{:04X}  {} {:<8} {:<8}  A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X}",
+            self.pc,
+            bytes,
+            inst.name,
+            operand,
+            self.a,
+            self.x,
+            self.y,
+            self.status,
+            self.stkp,
+        )
     }
 
     
@@ -528,6 +604,7 @@ impl Olc6502 {
     // same way as a regular IRQ, but reads the new program counter address
     // form location 0xFFFA.
     pub fn nmi(&mut self, bus: &mut dyn BusInterface) {
+        print!("Calling nmi"); 
         // no wrapping because stkp is u8 so there are no overflows
         self.write(bus, 0x0100 + self.stkp as u16, ((self.pc >> 8) & 0x00FF) as u8);
         self.stkp = self.stkp.wrapping_sub(1); 
@@ -541,12 +618,12 @@ impl Olc6502 {
         self.write(bus, 0x0100 + self.stkp as u16, self.status);
         self.stkp = self.stkp.wrapping_sub(1); 
 
-        self.addr_abs = 0xFFFE;
+        self.addr_abs = 0xFFFA;
         let lo: u16 = self.read(bus,self.addr_abs                ) as u16;
         let hi: u16 = self.read(bus,self.addr_abs.wrapping_add(1)) as u16;
         self.pc = (hi << 8) | lo; 
         
-        self.cycles = 7;
+        self.cycles = 8;
     }
 
 
@@ -564,6 +641,10 @@ impl Olc6502 {
     
         // Only actually do work once enough time has passed
         if self.cycles == 0 {
+            if self.trace_enabled {
+                println!("{}", self.trace(bus));
+            }
+
             // Read one byte from bus containing the opcode
             self.opcode = bus.read(self.pc, true);
             self.set_flag(FLAG6502_U, true);
