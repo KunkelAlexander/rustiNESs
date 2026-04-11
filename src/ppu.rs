@@ -143,6 +143,7 @@ impl Olc2c02 {
         self.screen.to_vec()
     }
 
+    // Depending on the increment mode flag, we either move horizontally (1 tile) or vertically (skip 32 tiles horizontally)
     fn ppu_addr_increment(&self) -> u16 {
         if (self.control & Olc2c02::CTRL_INCREMENT_MODE) != 0 {
             32

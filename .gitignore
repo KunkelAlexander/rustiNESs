@@ -1,3 +1,8 @@
 target/
 *.lock
 tests/harte
+docs/pkg/README.md
+src/main.rs
+.gitignore
+output/
+roms/
