@@ -1,7 +1,39 @@
-use crate::{cartridge, interfaces::{CartridgeInterface, PpuInterface}};
+use crate::{interfaces::{CartridgeInterface, PpuInterface}};
 
 pub const SCREEN_W: usize = 256;
 pub const SCREEN_H: usize = 240;
+
+
+// Javidx9 goes via bitfields here but the bit gymnastics are bit too much for me
+// I prefer to keep it a little simpler and less efficient, especially for the clock function
+#[derive(Copy, Clone)]
+struct Loopy {
+    coarse_x:    u8,      // 0..31
+    coarse_y:    u8,      // 0..31
+    nametable_x: u8,      // 0..1
+    nametable_y: u8,      // 0..1
+    fine_y:      u8,      // 0..7
+}
+
+impl Loopy {
+    fn from_u16(value: u16) -> Self {
+        Self {
+            coarse_x:    ((value >>  0) & 0b00011111) as u8,
+            coarse_y:    ((value >>  5) & 0b00011111) as u8,
+            nametable_x: ((value >> 10) & 0b00000001) as u8,
+            nametable_y: ((value >> 11) & 0b00000001) as u8,
+            fine_y:      ((value >> 12) & 0b00000111) as u8,
+        }
+    }
+
+    fn to_u16(&self) -> u16 {
+              ((self.coarse_x    as u16) <<  0)
+            | ((self.coarse_y    as u16) <<  5)
+            | ((self.nametable_x as u16) << 10)
+            | ((self.nametable_y as u16) << 11)
+            | ((self.fine_y      as u16) << 12)
+    }
+}
 
 pub struct Olc2c02 {
     screen:                [u8; SCREEN_H*SCREEN_W],   // Frame buffer
@@ -18,12 +50,23 @@ pub struct Olc2c02 {
     status:                 u8,
     mask:                   u8,
     control:                u8,
-    loopy:                  u16,
+    vram_addr:              Loopy,
+    tram_addr:              Loopy,
+    fine_x:                 u8,
 
     address_latch:          u8, 
     ppu_data_buffer:        u8, 
-    ppu_address:            u16,
-    pub nmi:                bool
+    pub nmi:                bool, 
+
+	// Background rendering
+    bg_shifter_pattern_hi:  u16,
+    bg_shifter_pattern_lo:  u16,
+    bg_shifter_attrib_hi:   u16,
+    bg_shifter_attrib_lo:   u16,
+    bg_next_tile_lsb:       u8,
+    bg_next_tile_msb:       u8,
+    bg_next_tile_id:        u8,
+    bg_next_tile_attrib:    u8,
 }
 
 impl Olc2c02 {
@@ -59,14 +102,7 @@ impl Olc2c02 {
     pub const CTRL_SLAVE_MODE:              u8 = 1 << 6;
     pub const CTRL_ENABLE_NMI:              u8 = 1 << 7;
 
-    // =====================
-    // LOOPY REGISTER (u16)
-    // =====================
-    pub const LOOPY_COARSE_X_MASK:          u16 = 0b00000_00000_00000_11111;
-    pub const LOOPY_COARSE_Y_MASK:          u16 = 0b00000_00000_11111_00000;
-    pub const LOOPY_NAMETABLE_X:            u16 = 1 << 10;
-    pub const LOOPY_NAMETABLE_Y:            u16 = 1 << 11;
-    pub const LOOPY_FINE_Y_MASK:            u16 = 0b111 << 12;
+
 
     pub fn new() -> Self {
         Self {     
@@ -75,24 +111,97 @@ impl Olc2c02 {
             table_palette:          [0u8; 32],
             table_pattern:          [0u8; 2*4096],    
             sprite_name_table:      [0u8; SCREEN_H*SCREEN_W*2],
-            scanline:        0, 
-            cycle:           0,
-            frame_complete:  false,
-            noise_state:     0x12345678,
-            status:          0x00,
-            mask:            0x00,
-            control:         0x00,
-            loopy:           0x0000,
-            address_latch:   0x00, 
-            ppu_data_buffer: 0x00, 
-            ppu_address:     0x0000,
-            nmi:             false
+            scanline:               0, 
+            cycle:                  0,
+            frame_complete:         false,
+            noise_state:            0x12345678,
+            status:                 0x00,
+            mask:                   0x00,
+            control:                0x00,
+            vram_addr:              Loopy::from_u16(0),
+            tram_addr:              Loopy::from_u16(0),
+            fine_x:                 0x00,
+            address_latch:          0x00, 
+            ppu_data_buffer:        0x00, 
+            nmi:                    false, 
+            bg_shifter_pattern_hi:  0x0000,
+            bg_shifter_pattern_lo:  0x0000,
+            bg_shifter_attrib_hi:   0x0000,
+            bg_shifter_attrib_lo:   0x0000,
+            bg_next_tile_lsb:       0x00,
+            bg_next_tile_msb:       0x00,
+            bg_next_tile_id:        0x00,
+            bg_next_tile_attrib:    0x00,
         }
     }
 
     pub fn set_pixel(&mut self, x: usize, y: usize, colour: u8) {
         if x < SCREEN_W  && y < SCREEN_H {
             self.screen[y * SCREEN_W + x] = colour;
+        }
+    }
+
+	// Increment the background tile "pointer" one tile/column horizontally
+    fn increment_scroll_x(&mut self) {
+        if (self.mask & Olc2c02::MASK_RENDER_BACKGROUND != 0) || (self.mask & Olc2c02::MASK_RENDER_SPRITES != 0) {
+            if self.vram_addr.coarse_x == 31 {
+                self.vram_addr.coarse_x     = 0;
+                self.vram_addr.nametable_x ^= 1;
+            } else {
+                self.vram_addr.coarse_x += 1;
+            }
+        }
+    }
+
+	// Increment the background tile "pointer" one scanline vertically
+    fn increment_scroll_y(&mut self) {
+        if (self.mask & Olc2c02::MASK_RENDER_BACKGROUND != 0) || (self.mask & Olc2c02::MASK_RENDER_SPRITES != 0) {
+            if self.vram_addr.fine_y < 7 {
+                self.vram_addr.fine_y += 1;
+            } else {
+                self.vram_addr.fine_y = 0;
+
+                if self.vram_addr.coarse_y == 29 {
+                    self.vram_addr.coarse_y     = 0;
+                    self.vram_addr.nametable_y ^= 1;
+                } else if self.vram_addr.coarse_y == 31 {
+                    self.vram_addr.coarse_y  = 0;
+                } else {
+                    self.vram_addr.coarse_y += 1;
+                }
+            }
+        }
+    }
+
+    fn transfer_address_x(&mut self) {
+        if (self.mask & Olc2c02::MASK_RENDER_BACKGROUND != 0) || (self.mask & Olc2c02::MASK_RENDER_SPRITES != 0) {
+            self.vram_addr.nametable_x = self.tram_addr.nametable_x;
+            self.vram_addr.coarse_x    = self.tram_addr.coarse_x;
+        }
+    }
+
+    fn transfer_address_y(&mut self) {
+        if (self.mask & Olc2c02::MASK_RENDER_BACKGROUND != 0) || (self.mask & Olc2c02::MASK_RENDER_SPRITES != 0) {
+            self.vram_addr.nametable_y = self.tram_addr.nametable_y;
+            self.vram_addr.coarse_y    = self.tram_addr.coarse_y;
+            self.vram_addr.fine_y      = self.tram_addr.fine_y;
+        }
+    }
+
+    fn load_background_shifters(&mut self) {
+		self.bg_shifter_pattern_lo = (self.bg_shifter_pattern_lo & 0xFF00) | self.bg_next_tile_lsb as u16;
+		self.bg_shifter_pattern_hi = (self.bg_shifter_pattern_hi & 0xFF00) | self.bg_next_tile_msb as u16;
+		self.bg_shifter_attrib_lo  = (self.bg_shifter_attrib_lo  & 0xFF00) | if (self.bg_next_tile_attrib & 0b01) != 0 { 0x00FF } else { 0x0000 };
+		self.bg_shifter_attrib_hi  = (self.bg_shifter_attrib_hi  & 0xFF00) | if (self.bg_next_tile_attrib & 0b10) != 0 { 0x00FF } else { 0x0000 };
+    }
+
+    
+    fn update_shifters(&mut self) {
+        if self.mask & Olc2c02::MASK_RENDER_BACKGROUND != 0 {
+            self.bg_shifter_pattern_lo <<= 1;
+            self.bg_shifter_pattern_hi <<= 1;
+            self.bg_shifter_attrib_lo  <<= 1;
+            self.bg_shifter_attrib_hi  <<= 1;
         }
     }
 
@@ -103,11 +212,84 @@ impl Olc2c02 {
     // Vblank: 241...260
     // Pre-render: 261 
     // Javidx9 uses -1 for pre-render since he uses a signed integer
-    pub fn clock(&mut self)  {
+    pub fn clock(&mut self, cartridge: &mut dyn CartridgeInterface)  {
 
-        if self.scanline == 261 && self.cycle == 1 {
-            self.status &= !Olc2c02::STATUS_VERTICAL_BLANK;
+        let render_scanline = self.scanline < 240 || self.scanline == 261;
+
+        if  render_scanline
+            && ((self.cycle >= 2 && self.cycle < 258) || (self.cycle >= 321 && self.cycle < 338)) {
+
+            self.update_shifters();
+
+            match ((self.cycle - 1) % 8) {
+                0 => {
+                    self.load_background_shifters();
+
+                    let addr = 0x2000 | (self.vram_addr.to_u16() & 0x0FFF);
+
+                    self.bg_next_tile_id = self.read_ppu(addr, cartridge).unwrap_or(0);
+                },
+                2 => {
+                    let addr = (
+                        0x23C0                                        | 
+                        ((self.vram_addr.nametable_y as u16) << 11)   | 
+                        ((self.vram_addr.nametable_x as u16) << 10)   | 
+                        ((self.vram_addr.coarse_y as u16) >> 2) << 3) | 
+                        ((self.vram_addr.coarse_x as u16) >> 2
+                    );                        
+                    self.bg_next_tile_attrib = self.read_ppu(addr, cartridge).unwrap_or(0);
+                    if self.vram_addr.coarse_y & 0x02 != 0 {
+                        self.bg_next_tile_attrib >>= 4;
+                    } 
+                    if self.vram_addr.coarse_x & 0x02 != 0 {
+                        self.bg_next_tile_attrib >>= 2;
+                    } 
+                    self.bg_next_tile_attrib &= 0x03;
+                }
+                4 => {
+                    let addr = (
+                        (((((self.control & Olc2c02::CTRL_PATTERN_BACKGROUND) as u16) >> 4) << 12) as u16)
+                        + ((self.bg_next_tile_id as u16) << 4) 
+                        + (self.vram_addr.fine_y as u16)
+                    );
+
+                    self.bg_next_tile_lsb = self.read_ppu(addr, cartridge).unwrap_or(0);
+                }
+
+                6 => {
+                    let addr = (
+                        (((((self.control & Olc2c02::CTRL_PATTERN_BACKGROUND) as u16) >> 4) << 12) as u16)
+                        + ((self.bg_next_tile_id as u16) << 4) 
+                        + (self.vram_addr.fine_y as u16)
+                        + 8
+                    );
+
+                    self.bg_next_tile_msb = self.read_ppu(addr, cartridge).unwrap_or(0);
+                }
+                7 => {
+                    self.increment_scroll_x();
+                }
+                _ => {}
+            }
         }
+
+        if render_scanline && self.cycle == 256 {
+            self.increment_scroll_y();
+        }
+        
+        if render_scanline && self.cycle == 257 {
+            self.load_background_shifters();
+            self.transfer_address_x();
+        }
+
+        if render_scanline && (self.cycle == 338 || self.cycle == 340) {
+            
+            let addr = 0x2000 | (self.vram_addr.to_u16() & 0x0FFF);
+
+            self.bg_next_tile_id = self.read_ppu(addr, cartridge).unwrap_or(0);
+        }
+
+        
 
         if self.scanline == 241 && self.cycle == 1 {
             self.status |= Olc2c02::STATUS_VERTICAL_BLANK;
@@ -115,14 +297,51 @@ impl Olc2c02 {
                 self.nmi = true;
             }
         }
-        // Test noise
-        self.noise_state ^= self.noise_state << 13;
-        self.noise_state ^= self.noise_state >> 17;
-        self.noise_state ^= self.noise_state << 5;
 
-        let c = (self.noise_state & 0xFF) as u8;
+        if self.scanline == 261 && self.cycle >= 280 && self.cycle < 305 {
+            self.transfer_address_y();
+        }
+        
 
-        self.set_pixel(self.cycle as usize, self.scanline as usize, c);
+        if self.scanline == 261 && self.cycle == 1 {
+            self.status &= !Olc2c02::STATUS_VERTICAL_BLANK;
+        }
+
+        let mut bg_pixel: u8   = 0x00; 
+        let mut bg_palette: u8 = 0x00;
+        let mut colour: u8     = 0x00;
+
+        if self.mask & Olc2c02::MASK_RENDER_BACKGROUND != 0 {
+            let bit_mux: u16 = 0x8000 >> self.fine_x;
+
+
+            // Select Plane pixels by extracting from the shifter 
+            // at the required location. 
+            let p0_pixel = ((self.bg_shifter_pattern_lo & bit_mux) > 0) as u8;
+            let p1_pixel = ((self.bg_shifter_pattern_hi & bit_mux) > 0) as u8;
+
+            // Combine to form pixel index
+            bg_pixel = (p1_pixel << 1) | p0_pixel;
+
+            // Get palette
+            let bg_pal0  = ((self.bg_shifter_attrib_lo & bit_mux) > 0) as u8;
+            let bg_pal1  = ((self.bg_shifter_attrib_hi & bit_mux) > 0) as u8;
+            bg_palette = (bg_pal1 << 1) | bg_pal0;
+
+            colour = self.get_colour_from_palette_ram(bg_palette, bg_pixel, cartridge).unwrap_or(0);
+
+        } else {
+            self.noise_state ^= self.noise_state << 13;
+            self.noise_state ^= self.noise_state >> 17;
+            self.noise_state ^= self.noise_state << 5;
+
+            colour = (self.noise_state & 0xFF) as u8;
+        }
+
+        if self.scanline < 240 && self.cycle >= 1 && self.cycle <= 256 {
+            self.set_pixel((self.cycle - 1) as usize, self.scanline as usize, colour);
+        }
+
         
         // This is weird NES stuff
         // There are 341 PPU cycles per scanline
@@ -130,7 +349,7 @@ impl Olc2c02 {
 
         if self.cycle >= 341 {
             self.cycle = 0;
-            self.scanline = self.scanline.wrapping_add(1);
+            self.scanline += 1;
 
             if self.scanline >= 262 {
                 self.scanline = 0;
@@ -172,11 +391,12 @@ impl PpuInterface for Olc2c02 {
          0x0006 => 0x00, // PPU Address
          0x0007 => {
             let temp         = self.ppu_data_buffer;
-            let addr        = self.ppu_address;
-            self.ppu_data_buffer = self.read_ppu(addr, cartridge).unwrap_or(0x00);;
+            let addr        = self.vram_addr.to_u16();
+            self.ppu_data_buffer = self.read_ppu(addr, cartridge).unwrap_or(0x00);
 
             // Auto-increment for convenience - we rarely want to read/write the same location twice
-            self.ppu_address = self.ppu_address.wrapping_add(self.ppu_addr_increment()) & 0x3FFF;
+            let new_addr    = addr.wrapping_add(self.ppu_addr_increment());
+            self.vram_addr       = Loopy::from_u16(new_addr);
 
             if addr >= 0x3F00 {
                 self.ppu_data_buffer
@@ -194,6 +414,9 @@ impl PpuInterface for Olc2c02 {
         // Control
          0x0000 => {
             self.control = data;
+            // Set tram_addr.nametable_x/y = control.nametable_x/y
+            self.tram_addr.nametable_x = ((data & Olc2c02::CTRL_NAMETABLE_X) != 0) as u8;
+            self.tram_addr.nametable_y = ((data & Olc2c02::CTRL_NAMETABLE_Y) != 0) as u8;
          }, 
          // Mask
          0x0001 => {
@@ -202,23 +425,39 @@ impl PpuInterface for Olc2c02 {
          0x0002 => {}, // Status
          0x0003 => {}, // OAM Address
          0x0004 => {}, // OAM Data
-         0x0005 => {}, // Scroll
+         0x0005 => {
+            
+            if self.address_latch == 0 {
+                self.fine_x             = data & 0b111; // first three bits of data
+                self.tram_addr.coarse_x = data >> 3;    // bits 4-8
+                self.address_latch      = 1;
+            } else {
+                self.tram_addr.fine_y   = data & 0b111; // first three bits of data
+                self.tram_addr.coarse_y = data >> 3;    // bits 4-8
+                self.address_latch   = 0;
+            }
+
+         }, // Scroll
          // PPU Address
          0x0006 => {
             if self.address_latch == 0 {
-                self.ppu_address = (self.ppu_address & 0x00FF) | (((data & 0x3F) as u16) << 8); 
-                self.address_latch = 1;
+                self.tram_addr       = Loopy::from_u16((self.tram_addr.to_u16() & 0x00FF) | ((data as u16) << 8)); 
+                self.address_latch   = 1;
             } else {
-                self.ppu_address = (self.ppu_address & 0xFF00) | data as u16; 
-                self.address_latch = 0;
+                self.tram_addr       = Loopy::from_u16((self.tram_addr.to_u16() & 0xFF00) | ((data as u16) << 0)); 
+                self.vram_addr       = self.tram_addr;
+                self.address_latch   = 0;
             }
          }, 
          // PPU Data
          0x0007 => {
-            self.write_ppu(self.ppu_address, data, cartridge);
+            let addr = self.vram_addr.to_u16();
+            self.write_ppu(addr, data, cartridge);
+
+            let new_addr = addr.wrapping_add(self.ppu_addr_increment());
             
             // Auto-increment for convenience - we rarely want to read/write the same location twice
-            self.ppu_address = self.ppu_address.wrapping_add(self.ppu_addr_increment()) & 0x3FFF;
+            self.vram_addr = Loopy::from_u16(new_addr);
          }, 
          _      => {},
         };
@@ -277,7 +516,6 @@ impl PpuInterface for Olc2c02 {
         }
         else if addr >= 0x3F00 && addr <= 0x3FFF
         {
-            let raw = addr;
             addr &= 0x001F;
             if addr == 0x0010 {addr = 0x0000;}
             if addr == 0x0014 {addr = 0x0004;}
@@ -335,16 +573,7 @@ impl Olc2c02 {
                         let y: u16 = n_tile_y * 8 + row;
                         let w: u16 = 128;
                         
-
-                        // Map failed read to index 0
-                        let index = match self.get_colour_from_palette_ram(palette, pixel, cartridge) {
-                            Some(v) => {
-                                v
-                            },
-                            None => {
-                                0
-                            },
-                        };
+                        let index = self.get_colour_from_palette_ram(palette, pixel, cartridge).unwrap_or(0);
 
                         sprite_pattern_table[(x + y * w) as usize] = index; 
                     }

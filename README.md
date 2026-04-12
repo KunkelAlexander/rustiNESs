@@ -6,6 +6,12 @@ This project aims to incrementally emulate the original NES hardware, starting w
 
 ## Devlog
 
+## Day 10: 12.04.2025
+- Hallelujah: `nestest.nes` and `smb.nes` backgrounds are rendered correctly! 
+
+![](figures/25.png)
+![](figures/26.png)
+
 ## Day 9: 11.04.2025
 - Fix bug in CPU NMI code 
 - Load `smb.nes` and show pattern table
@@ -33,6 +39,17 @@ This project aims to incrementally emulate the original NES hardware, starting w
 - Let's dive right in: We fill in the PPU code for reading and writing to 0x2000 - 0x2FFF from PPU RAM: In my implementation, the cartridge decides how to map addresses to the name table based on the mirror flag. We can output the first nametable for the nestest ROM  as text:
 
 ![](figures/22.png)
+
+- Very nice - we could actually display the background by choosing the right tiles from the palette but I would like to implement the whole thing first
+- To get things to render properly, we need to count scanlines and cycles which is where [this handy diagram](https://www.nesdev.org/w/images/default/4/4f/Ppu.svg) from nesdev comes in
+
+![](figures/23.png)
+
+
+- 8 cycles represent 1 row of one tile
+- During thoses 8 cycles, it loads the next 8 bytes for the next 8 cycles: It loads one nametable byte, one attribute byte and the pattern itself (2 bytes)
+- This repeats for the 256 visible pixels and then we get to the cycles where nothing is rendered (257 - 340)
+- Loopy address (named after a wonderful person called loopy): Internal address for the PPU that correlates the scanline position to everything else, explained [here](https://www.nesdev.org/wiki/PPU_scrolling)
 
 ## Day 8: 02.04.2026
 - Finish pattern table viewer 

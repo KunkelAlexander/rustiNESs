@@ -79,6 +79,10 @@ impl Bus {
     pub fn reset(&mut self) {
     }
 
+    pub fn clock(&mut self) {
+        self.ppu.clock(self.cartridge.as_mut());
+    }
+
     pub fn insert_cartridge(&mut self, cartridge: Box<dyn CartridgeInterface>) {
         self.cartridge = cartridge;
     }

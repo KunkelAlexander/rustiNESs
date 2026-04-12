@@ -43,7 +43,7 @@ impl NES {
     }
 
     pub fn clock(&mut self) {
-        self.bus.ppu.clock();
+        self.bus.clock();
 
         if self.system_clock_counter % 3 == 0 {
             self.cpu.clock(&mut self.bus);
