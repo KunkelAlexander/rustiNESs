@@ -395,7 +395,7 @@ button.primary {
   display: none;
 }
 
-body[data-mode="nes"] .mode-nes { display: flex; }
+body[data-mode="nes"] .mode-nes { display: block; }
 body[data-mode="cpu"] .mode-cpu { display: block; }
 
 /* 1. Force 1 column earlier to give NES room */
@@ -474,3 +474,90 @@ body[data-mode="cpu"] .mode-cpu { display: block; }
 /* allow grid items to shrink instead of forcing overflow */
 .grid > * { min-width: 0; }
 .card { min-width: 0; }
+
+.controller {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 20px;
+  align-items: center;
+  justify-items: center;
+  margin-top: 12px;
+}
+
+.dpad {
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+}
+
+.dpad-mid {
+  display: grid;
+  grid-template-columns: 64px 40px 64px;
+  gap: 10px;
+  align-items: center;
+}
+
+.center-buttons {
+  display: grid;
+  gap: 12px;
+}
+
+.ab-buttons {
+  display: grid;
+  grid-template-columns: repeat(2, 72px);
+  gap: 14px;
+  align-items: center;
+}
+
+.pad-btn {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: #f2f2f2;
+  font-size: 20px;
+  font-weight: 600;
+  user-select: none;
+  touch-action: none;
+}
+
+.pad-btn.small {
+  width: 90px;
+  height: 44px;
+  border-radius: 999px;
+  font-size: 14px;
+}
+
+.pad-btn.action {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  font-size: 22px;
+}
+
+.pad-btn.pressed {
+  background: var(--accent);
+  color: white;
+  transform: scale(0.96);
+}
+
+@media (max-width: 700px) {
+  .controller {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+
+  .ab-buttons {
+    grid-template-columns: repeat(2, 80px);
+  }
+
+  .pad-btn {
+    width: 72px;
+    height: 72px;
+  }
+
+  .pad-btn.action {
+    width: 84px;
+    height: 84px;
+  }
+}

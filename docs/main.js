@@ -95,6 +95,18 @@ const NES_PALETTE = [
   [0, 0, 0],
 ];
 
+const controller1 = {
+  x: 0,     // NES A
+  z: 0,     // NES B
+  a: 0,     // Select
+  s: 0,     // Start
+  up: 0,
+  down: 0,
+  left: 0,
+  right: 0,
+};
+
+
 
 function initCanvas() {
   const canvas = $("screen");
@@ -222,7 +234,10 @@ function renderRam() {
 
 function updateUI() {
   renderRegisters();
-  renderRam();
+  
+  if (mode === "cpu") {
+    renderRam();
+  }
 }
 
 function renderFrame() {
@@ -241,6 +256,42 @@ function renderFrame() {
   }
 
   ctx.putImageData(imageData, 0, 0);
+}
+
+function syncController() {
+  if (!emu) return;
+
+  emu.set_controller(
+    0,
+    controller1.x,
+    controller1.z,
+    controller1.a,
+    controller1.s,
+    controller1.up,
+    controller1.down,
+    controller1.left,
+    controller1.right
+  );
+}
+
+function setButtonState(name, pressed) {
+  if (!(name in controller1)) return;
+  controller1[name] = pressed ? 1 : 0;
+  syncController();
+}
+
+function keyToButton(code) {
+  switch (code) {
+    case "KeyX": return "x";       // NES A
+    case "KeyZ": return "z";       // NES B
+    case "KeyA": return "a";       // Select
+    case "KeyS": return "s";       // Start
+    case "ArrowUp": return "up";
+    case "ArrowDown": return "down";
+    case "ArrowLeft": return "left";
+    case "ArrowRight": return "right";
+    default: return null;
+  }
 }
 
 function renderPatternTableToCanvas(buffer, imageData, ctx) {
@@ -265,15 +316,14 @@ function renderPatternTables() {
 
   const palette = Number($("paletteSelect")?.value ?? 0);
 
-  log(`Getting PT 0 `, palette);
   const table0 = emu.get_pattern_table(0, palette);
-  
-  log(`Getting PT 1 `, palette);
   const table1 = emu.get_pattern_table(1, palette);
 
   renderPatternTableToCanvas(table0, pattern0ImageData, pattern0Ctx);
   renderPatternTableToCanvas(table1, pattern1ImageData, pattern1Ctx);
 }
+
+let patternFrameCounter = 0;
 
 function frame() {
   if (!running) return;
@@ -285,7 +335,13 @@ function frame() {
     } else {
       emu.run_frame();
       renderFrame();
-      renderPatternTables();
+      
+      patternFrameCounter++;
+      if (patternFrameCounter >= 60) {
+        renderPatternTables();
+        patternFrameCounter = 0;
+      }
+
       updateUI();
     }
   } catch (e) {
@@ -394,6 +450,55 @@ function bindUI() {
 
   $("paletteSelect")?.addEventListener("change", () => {
     renderPatternTables();
+  });
+
+  window.addEventListener("keydown", (e) => {
+    const btn = keyToButton(e.code);
+    if (!btn) return;
+
+    e.preventDefault();
+    setButtonState(btn, true);
+  });
+
+  window.addEventListener("keyup", (e) => {
+    const btn = keyToButton(e.code);
+    if (!btn) return;
+
+    e.preventDefault();
+    setButtonState(btn, false);
+  });
+
+  document.querySelectorAll("[data-btn]").forEach((btnEl) => {
+    const btnName = btnEl.dataset.btn;
+
+    const press = (e) => {
+      e.preventDefault();
+      btnEl.classList.add("pressed");
+      setButtonState(btnName, true);
+    };
+
+    const release = (e) => {
+      e.preventDefault();
+      btnEl.classList.remove("pressed");
+      setButtonState(btnName, false);
+    };
+
+    btnEl.addEventListener("pointerdown", press);
+    btnEl.addEventListener("pointerup", release);
+    btnEl.addEventListener("pointercancel", release);
+    btnEl.addEventListener("pointerleave", release);
+  });
+
+
+  window.addEventListener("pointerup", () => {
+    for (const key in controller1) {
+      controller1[key] = 0;
+    }
+    syncController();
+
+    document.querySelectorAll("[data-btn]").forEach((el) => {
+      el.classList.remove("pressed");
+    });
   });
 
 
