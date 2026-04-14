@@ -109,6 +109,8 @@ impl Cartridge {
             return Err("Unsupported file type".into());
 		}
 
+        println!("Mapper id {}", n_mapper_id);
+
 		// Load appropriate mapper
 		let mapper: Box<dyn MapperInterface> = match n_mapper_id {
 		 0 => Box::new(Mapper000 { prg_banks: header.prg_rom_chunks, chr_banks: header.chr_rom_chunks }),

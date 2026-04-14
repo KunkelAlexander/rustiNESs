@@ -124,4 +124,12 @@ impl NES {
     pub fn get_pattern_table(&self, table: u8, palette: u8) -> Vec<u8> {
         self.bus.get_pattern_table(table, palette)
     }
+
+    pub fn set_controller(&mut self, i: usize, x: bool, z: bool, a: bool, s: bool, up: bool, down: bool, left: bool, right: bool) {
+        // maximum of two controllers
+        if i > 1 {
+            return;
+        }
+        self.bus.set_controller(i, x as u8, z as u8, a as u8, s as u8, up as u8, down as u8, left as u8, right as u8);
+    } 
 }

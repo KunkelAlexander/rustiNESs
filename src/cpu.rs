@@ -459,7 +459,7 @@ impl Olc6502 {
             opcode:   0,
             cycles:   0,
 
-            trace_enabled: true
+            trace_enabled: false
         }
     }
 
@@ -604,7 +604,6 @@ impl Olc6502 {
     // same way as a regular IRQ, but reads the new program counter address
     // form location 0xFFFA.
     pub fn nmi(&mut self, bus: &mut dyn BusInterface) {
-        print!("Calling nmi"); 
         // no wrapping because stkp is u8 so there are no overflows
         self.write(bus, 0x0100 + self.stkp as u16, ((self.pc >> 8) & 0x00FF) as u8);
         self.stkp = self.stkp.wrapping_sub(1); 

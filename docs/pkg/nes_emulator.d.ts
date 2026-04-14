@@ -16,6 +16,7 @@ export class NES {
     constructor();
     reset(): void;
     run_frame(): void;
+    set_controller(i: number, x: boolean, z: boolean, a: boolean, s: boolean, up: boolean, down: boolean, left: boolean, right: boolean): void;
     step_instruction(): void;
 }
 
@@ -36,6 +37,7 @@ export interface InitOutput {
     readonly nes_new: () => number;
     readonly nes_reset: (a: number) => void;
     readonly nes_run_frame: (a: number) => void;
+    readonly nes_set_controller: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => void;
     readonly nes_step_instruction: (a: number) => void;
     readonly __wbindgen_externrefs: WebAssembly.Table;
     readonly __wbindgen_free: (a: number, b: number, c: number) => void;

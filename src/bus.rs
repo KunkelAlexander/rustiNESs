@@ -46,7 +46,9 @@ impl BusInterface for SimpleBus {
 pub struct Bus {
     cpu_ram:              [u8; 2048],
     pub ppu:              Olc2c02,
-    cartridge:            Box<dyn CartridgeInterface>
+    cartridge:            Box<dyn CartridgeInterface>,
+    pub controller:       [u8; 2], // this needs to be set externally
+    controller_state:     [u8; 2], // store snapshots of the inputs when the corresponding memory address is written to. 
 }
 
 impl Bus {
@@ -56,7 +58,9 @@ impl Bus {
         Self {
             cpu_ram: [0; 2048],
             ppu: Olc2c02::new(),
-            cartridge: cartridge
+            cartridge: cartridge,
+            controller: [0; 2],
+            controller_state: [0; 2]
         }
     }
 
@@ -86,6 +90,19 @@ impl Bus {
     pub fn insert_cartridge(&mut self, cartridge: Box<dyn CartridgeInterface>) {
         self.cartridge = cartridge;
     }
+
+    
+    pub fn set_controller(&mut self, i: usize, x: u8, z: u8, a: u8, s: u8, up: u8, down: u8, left: u8, right: u8) {
+        self.controller[i]  = 
+          x     * (1 << 7) 
+        + z     * (1 << 6) 
+        + a     * (1 << 5) 
+        + s     * (1 << 4) 
+        + up    * (1 << 3) 
+        + down  * (1 << 2) 
+        + left  * (1 << 1) 
+        + right * (1 << 0);
+    } 
 }
 
 impl BusInterface for Bus {
@@ -104,6 +121,13 @@ impl BusInterface for Bus {
         {
             return self.ppu.read_cpu(addr & 0x0007, read_only, self.cartridge.as_mut());
         }
+        // Read most significant bit of controller state via pop
+        else if (addr >= 0x4016 && addr <= 0x4017)
+        {
+            let temp = ((self.controller_state[(addr & 0x0001) as usize] & 0x80) > 0) as u8;
+            self.controller_state[(addr & 0x0001) as usize] <<= 1; 
+            return temp;
+        }
         0
     }
     fn write(&mut self, addr: u16, data: u8) {
@@ -117,9 +141,14 @@ impl BusInterface for Bus {
            self.cpu_ram[(addr & 0x07FF) as usize] = data;
         }
         // PPU Address range, mirrored every 8 bytes
-        if (addr >= 0x2000 && addr <= 0x3FFF)
+        else if (addr >= 0x2000 && addr <= 0x3FFF)
         {
             self.ppu.write_cpu(addr & 0x0007, data, self.cartridge.as_mut());
+        }
+        // Copy external controller state into internal register
+        else if (addr >= 0x4016 && addr <= 0x4017)
+        {
+            self.controller_state[(addr & 0x0001) as usize] = self.controller[(addr & 0x0001) as usize];
         }
         
     }

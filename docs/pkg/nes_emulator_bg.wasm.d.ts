@@ -14,6 +14,7 @@ export const nes_load_program: (a: number, b: number, c: number, d: number) => v
 export const nes_new: () => number;
 export const nes_reset: (a: number) => void;
 export const nes_run_frame: (a: number) => void;
+export const nes_set_controller: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => void;
 export const nes_step_instruction: (a: number) => void;
 export const __wbindgen_externrefs: WebAssembly.Table;
 export const __wbindgen_free: (a: number, b: number, c: number) => void;

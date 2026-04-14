@@ -6,6 +6,22 @@ This project aims to incrementally emulate the original NES hardware, starting w
 
 ## Devlog
 
+## Day 11: 14.04.2025
+
+
+- Watch [ NES Emulator Part #5: PPU - Foreground Rendering ](https://www.youtube.com/watch?v=cksywUTZxlY)
+- Implement controller input 
+
+- 8 NES buttons are represented via one byte
+- Two controller ports mapped to addresses $4016 and $4017
+- CPU writes - PISO stores 8 bits
+- CPU reads - PISO returns 1 bit via a shift register
+- To fully read the state of the controller, the CPU must write to the memory map register and read 8 times 
+
+![](figures/27.png)
+
+
+
 ## Day 10: 12.04.2025
 - Hallelujah: `nestest.nes` and `smb.nes` backgrounds are rendered correctly! 
 

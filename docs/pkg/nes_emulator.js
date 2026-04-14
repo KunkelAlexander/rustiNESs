@@ -98,6 +98,20 @@ export class NES {
     run_frame() {
         wasm.nes_run_frame(this.__wbg_ptr);
     }
+    /**
+     * @param {number} i
+     * @param {boolean} x
+     * @param {boolean} z
+     * @param {boolean} a
+     * @param {boolean} s
+     * @param {boolean} up
+     * @param {boolean} down
+     * @param {boolean} left
+     * @param {boolean} right
+     */
+    set_controller(i, x, z, a, s, up, down, left, right) {
+        wasm.nes_set_controller(this.__wbg_ptr, i, x, z, a, s, up, down, left, right);
+    }
     step_instruction() {
         wasm.nes_step_instruction(this.__wbg_ptr);
     }

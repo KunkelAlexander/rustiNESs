@@ -14,6 +14,8 @@ use crate::ppu::Olc2c02;
 use crate::cartridge::{EmptyCartridge, Cartridge};
 use std::fs;
 use std::io::{Write, BufWriter};
+use image::{ImageBuffer, Luma};
+use std::error::Error;
 
 pub struct NES {
     cpu: Olc6502,
@@ -202,9 +204,40 @@ fn output_name_table(emu: &NES, path: &str) -> std::io::Result<()> {
     Ok(())
 }
 
+fn output_frame(emu: &NES, path: &str) -> Result<(), Box<dyn Error>> {
+    let frame = emu.frame();
+
+    let width = 256;
+    let height = 240; // NES actual resolution (not 256x256)
+
+    assert_eq!(frame.len(), width * height);
+
+    let mut img = ImageBuffer::<Luma<u8>, Vec<u8>>::new(width as u32, height as u32);
+
+    for y in 0..height {
+        for x in 0..width {
+            let val = frame[y * width + x];
+
+            // Map palette index → grayscale
+            // If values are 0–3:
+
+            // If values are 0–63 instead, use:
+            // let gray = (val * 4) as u8;
+
+            img.put_pixel(x as u32, y as u32, Luma([val]));
+        }
+    }
+
+    img.save(path)?;
+
+    println!("Saved frame to {}", path);
+    Ok(())
+}
+
+
 fn main() -> std::io::Result<()> {
     // adjust this path to your Downloads folder
-    let rom_path = r"roms/nestest.nes";
+    let rom_path = r"roms/dk.nes";
 
     // read file into bytes
     let bytes = fs::read(rom_path).expect("failed to read ROM");
@@ -221,15 +254,17 @@ fn main() -> std::io::Result<()> {
     // Dump before running
     output_pattern_table(&emu, "output/pattern_table_before.txt")?;
     output_name_table(&emu, "output/name_table_before.txt")?;
+    output_frame(&emu, "output/frame_before.png");
 
     // run some cycles
-    for _ in 0..1000000 {
+    for _ in 0..10000000 {
         emu.clock();
     }
     
     // Dump after running
     output_pattern_table(&emu, "output/pattern_table_after.txt")?;
     output_name_table(&emu, "output/name_table_after.txt")?;
+    output_frame(&emu, "output/frame_after.png");
 
     Ok(())
 }
