@@ -530,15 +530,13 @@ function loadProgram() {
 async function loadRomFile(file) {
   if (!emu) return;
 
-  pauseRun();
-
   const arrayBuffer = await file.arrayBuffer();
   const romBytes = new Uint8Array(arrayBuffer);
 
   emu.insert_cartridge(romBytes);
   log(`Loaded ROM: ${file.name}`);
   emu.reset();
-  log(`Reseted state`);
+  log(`Reset state`);
 
   updateUI();
   log(`Updated UI`);
