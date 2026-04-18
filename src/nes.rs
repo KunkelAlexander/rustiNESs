@@ -47,7 +47,7 @@ impl Nes {
                     // On even cycles, read data from the CPU 
                     if self.system_clock_counter % 2 == 0 {
                         let addr     = ((self.bus.dma_page as u16) << 8) | self.bus.dma_addr as u16;
-                        let data      = self.cpu.read(&mut self.bus, addr);
+                        let data      = self.bus.read(addr, false);
                         self.bus.dma_data = data;
                     }
                     // On odd cycles, write to the PPU's memory 
@@ -62,9 +62,7 @@ impl Nes {
                             self.bus.dma_transfer = false; 
                             self.bus.dma_dummy    = true;
                         }
-
                     }
-
                 }                
             } 
             else // if self.bus.dma_transfer {

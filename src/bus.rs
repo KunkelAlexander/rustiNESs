@@ -171,11 +171,12 @@ impl BusInterface for Bus {
             self.ppu.write_cpu(addr & 0x0007, data, self.cartridge.as_mut());
         }
         // DMA - Start DMA transfer in bus when this address is written to 
-        else if addr == 0x4014 
+        else if (addr == 0x4014)
         {
             self.dma_page     = data; 
             self.dma_addr     = 0x00; 
             self.dma_transfer = true;
+            self.dma_dummy    = true;
         }
         // Copy external controller state into internal register
         else if (addr >= 0x4016 && addr <= 0x4017)
@@ -185,5 +186,3 @@ impl BusInterface for Bus {
         
     }
 }
-
-

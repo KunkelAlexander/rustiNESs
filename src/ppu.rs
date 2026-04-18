@@ -468,99 +468,99 @@ impl PpuInterface for Olc2c02 {
     fn read_cpu(&mut self, addr: u16, _read_only: bool, cartridge: &mut dyn CartridgeInterface) -> u8 {
     
         let data = match addr {
-         0x0000 => 0x00, // Control
-         0x0001 => 0x00, // Mask
-         // Status
-         0x0002 => {
-            let temp = (self.status & 0xE0) | (self.ppu_data_buffer & 0x1F);
-            self.status &= !Olc2c02::STATUS_VERTICAL_BLANK;
-            self.address_latch = 0; 
-            temp
-         }, 
-         // OAM Address - reading from here does not make sense as the CPU does not care about the OAM address
-         0x0003 => 0x00,
-         // OAM Data
-         0x0004 => {
-            return self.oam.read(self.oam_addr);
-         }, 
-         0x0005 => 0x00, // Scroll
-         0x0006 => 0x00, // PPU Address
-         0x0007 => {
-            let temp         = self.ppu_data_buffer;
-            let addr        = self.vram_addr.to_u16();
-            self.ppu_data_buffer = self.read_ppu(addr, cartridge).unwrap_or(0x00);
-
-            // Auto-increment for convenience - we rarely want to read/write the same location twice
-            let new_addr    = addr.wrapping_add(self.ppu_addr_increment());
-            self.vram_addr       = Loopy::from_u16(new_addr);
-
-            if addr >= 0x3F00 {
-                self.ppu_data_buffer
-            } else {
+            0x0000 => 0x00, // Control
+            0x0001 => 0x00, // Mask
+            // Status
+            0x0002 => {
+                let temp = (self.status & 0xE0) | (self.ppu_data_buffer & 0x1F);
+                self.status &= !Olc2c02::STATUS_VERTICAL_BLANK;
+                self.address_latch = 0; 
                 temp
-            }
-         }, // PPU Data
-         _      => 0x00,
+            }, 
+            // OAM Address - reading from here does not make sense as the CPU does not care about the OAM address
+            0x0003 => 0x00,
+            // OAM Data
+            0x0004 => {
+                return self.oam.read(self.oam_addr);
+            }, 
+            0x0005 => 0x00, // Scroll
+            0x0006 => 0x00, // PPU Address
+            0x0007 => {
+                let temp         = self.ppu_data_buffer;
+                let addr        = self.vram_addr.to_u16();
+                self.ppu_data_buffer = self.read_ppu(addr, cartridge).unwrap_or(0x00);
+
+                // Auto-increment for convenience - we rarely want to read/write the same location twice
+                let new_addr    = addr.wrapping_add(self.ppu_addr_increment());
+                self.vram_addr       = Loopy::from_u16(new_addr);
+
+                if addr >= 0x3F00 {
+                    self.ppu_data_buffer
+                } else {
+                    temp
+                }
+            }, // PPU Data
+            _      => 0x00,
         };
         data
     }
 
     fn write_cpu(&mut self, addr: u16, data: u8, cartridge: &mut dyn CartridgeInterface)  {
         match addr {
-        // Control
-         0x0000 => {
-            self.control = data;
-            // Set tram_addr.nametable_x/y = control.nametable_x/y
-            self.tram_addr.nametable_x = ((data & Olc2c02::CTRL_NAMETABLE_X) != 0) as u8;
-            self.tram_addr.nametable_y = ((data & Olc2c02::CTRL_NAMETABLE_Y) != 0) as u8;
-         }, 
-         // Mask
-         0x0001 => {
-            self.mask = data;
-         }, 
-         0x0002 => {}, // Status
-         // OAM Address
-         0x0003 => {
-            self.oam_addr = data;
-         }, 
-         // OAM Data
-         0x0004 => {
-            self.oam.write(self.oam_addr, data); 
-         }, 
-         0x0005 => {
-            if self.address_latch == 0 {
-                self.fine_x             = data & 0b111; // first three bits of data
-                self.tram_addr.coarse_x = data >> 3;    // bits 4-8
-                self.address_latch      = 1;
-            } else {
-                self.tram_addr.fine_y   = data & 0b111; // first three bits of data
-                self.tram_addr.coarse_y = data >> 3;    // bits 4-8
-                self.address_latch      = 0;
-            }
+            // Control
+            0x0000 => {
+                self.control = data;
+                // Set tram_addr.nametable_x/y = control.nametable_x/y
+                self.tram_addr.nametable_x = ((data & Olc2c02::CTRL_NAMETABLE_X) != 0) as u8;
+                self.tram_addr.nametable_y = ((data & Olc2c02::CTRL_NAMETABLE_Y) != 0) as u8;
+            }, 
+            // Mask
+            0x0001 => {
+                self.mask = data;
+            }, 
+            0x0002 => {}, // Status
+            // OAM Address
+            0x0003 => {
+                self.oam_addr = data;
+            }, 
+            // OAM Data
+            0x0004 => {
+                self.oam.write(self.oam_addr, data); 
+                self.oam_addr = self.oam_addr.wrapping_add(1);
+            }, 
+            0x0005 => {
+                if self.address_latch == 0 {
+                    self.fine_x             = data & 0b111; // first three bits of data
+                    self.tram_addr.coarse_x = data >> 3;    // bits 4-8
+                    self.address_latch      = 1;
+                } else {
+                    self.tram_addr.fine_y   = data & 0b111; // first three bits of data
+                    self.tram_addr.coarse_y = data >> 3;    // bits 4-8
+                    self.address_latch      = 0;
+                }
+            }, // Scroll
+            // PPU Address
+            0x0006 => {
+                if self.address_latch == 0 {
+                    self.tram_addr       = Loopy::from_u16((self.tram_addr.to_u16() & 0x00FF) | ((data as u16) << 8)); 
+                    self.address_latch   = 1;
+                } else {
+                    self.tram_addr       = Loopy::from_u16((self.tram_addr.to_u16() & 0xFF00) | ((data as u16) << 0)); 
+                    self.vram_addr       = self.tram_addr;
+                    self.address_latch   = 0;
+                }
+            }, 
+            // PPU Data
+            0x0007 => {
+                let addr = self.vram_addr.to_u16();
+                self.write_ppu(addr, data, cartridge);
 
-         }, // Scroll
-         // PPU Address
-         0x0006 => {
-            if self.address_latch == 0 {
-                self.tram_addr       = Loopy::from_u16((self.tram_addr.to_u16() & 0x00FF) | ((data as u16) << 8)); 
-                self.address_latch   = 1;
-            } else {
-                self.tram_addr       = Loopy::from_u16((self.tram_addr.to_u16() & 0xFF00) | ((data as u16) << 0)); 
-                self.vram_addr       = self.tram_addr;
-                self.address_latch   = 0;
-            }
-         }, 
-         // PPU Data
-         0x0007 => {
-            let addr = self.vram_addr.to_u16();
-            self.write_ppu(addr, data, cartridge);
-
-            let new_addr = addr.wrapping_add(self.ppu_addr_increment());
-            
-            // Auto-increment for convenience - we rarely want to read/write the same location twice
-            self.vram_addr = Loopy::from_u16(new_addr);
-         }, 
-         _      => {},
+                let new_addr = addr.wrapping_add(self.ppu_addr_increment());
+                
+                // Auto-increment for convenience - we rarely want to read/write the same location twice
+                self.vram_addr = Loopy::from_u16(new_addr);
+            }, 
+            _      => {},
         };
     }
 

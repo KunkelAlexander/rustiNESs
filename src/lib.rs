@@ -72,18 +72,7 @@ impl NES {
         self.inner.get_pattern_table(table, palette)
     }
 
-    pub fn set_controller(
-        &mut self,
-        i: usize,
-        x: bool,
-        z: bool,
-        a: bool,
-        s: bool,
-        up: bool,
-        down: bool,
-        left: bool,
-        right: bool,
-    ) {
+    pub fn set_controller(&mut self, i: usize, x: bool, z: bool, a: bool, s: bool, up: bool, down: bool, left: bool, right: bool) {
         self.inner
             .set_controller(i, x, z, a, s, up, down, left, right);
     }
