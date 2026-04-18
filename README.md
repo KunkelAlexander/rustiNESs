@@ -4,6 +4,8 @@ A simple Nintendo Entertainment System (NES) emulator written in **Rust**, built
 
 This project aims to incrementally emulate the original NES hardware, starting with the **6502 CPU** and gradually adding the PPU, APU, cartridge mappers, and input devices.
 
+![](figures/1.gif)
+
 ## Devlog
 
 ## Day 11: 18.04.2025
@@ -52,6 +54,10 @@ This project aims to incrementally emulate the original NES hardware, starting w
 - Orientation: We can instruct the PPU to draw the sprite inverted in both axes. This means that we don't need two sprites for Mario running left and right 
 - Horizontal flipping: invert bits from 00000111 to 11100000
 - Vertical flipping: We need to actually read elsewhere - this is easier for 8x8 than for 8x16 tiles
+- I gave implementing the sprite rendering a first go, and behold: Donkey Kong
+
+
+![](figures/1.gif)
 
 
 
