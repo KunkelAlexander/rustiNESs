@@ -561,3 +561,138 @@ body[data-mode="cpu"] .mode-cpu { display: block; }
     height: 84px;
   }
 }
+
+.play-shell {
+  display: grid;
+  gap: 12px;
+}
+
+.play-actions {
+  grid-template-columns: repeat(2, minmax(0, max-content));
+  justify-content: start;
+}
+
+.rotate-hint {
+  display: none;
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+}
+.play-shell,
+#screen,
+.controller {
+  touch-action: none;
+}
+
+/* Fullscreen play mode */
+.play-shell:fullscreen,
+.play-shell:-webkit-full-screen {
+  background: #111;
+  color: white;
+  width: 100vw;
+  height: 100vh;
+  padding: max(12px, env(safe-area-inset-top))
+           max(12px, env(safe-area-inset-right))
+           max(12px, env(safe-area-inset-bottom))
+           max(12px, env(safe-area-inset-left));
+  box-sizing: border-box;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  align-items: center;
+  justify-items: center;
+  gap: 10px;
+}
+
+.play-shell:fullscreen .tv,
+.play-shell:-webkit-full-screen .tv {
+  width: min(100%, 110vh);
+  max-width: none;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+}
+
+.play-shell:fullscreen #screen,
+.play-shell:-webkit-full-screen #screen {
+  width: min(100vw, calc(100vh * 256 / 240));
+  max-height: 60vh;
+  height: auto;
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+.play-shell:fullscreen .power-led,
+.play-shell:-webkit-full-screen .power-led {
+  display: none;
+}
+
+.play-shell:fullscreen .controller,
+.play-shell:-webkit-full-screen .controller {
+  width: 100%;
+  max-width: 980px;
+}
+
+/* Mobile fullscreen: landscape-first layout */
+@media (orientation: landscape) and (max-width: 900px) {
+  .play-shell:fullscreen,
+  .play-shell:-webkit-full-screen {
+    grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+      "top top"
+      "screen controls";
+    align-items: center;
+  }
+
+  .play-shell:fullscreen .play-topbar,
+  .play-shell:-webkit-full-screen .play-topbar {
+    grid-area: top;
+    width: 100%;
+  }
+
+  .play-shell:fullscreen .tv,
+  .play-shell:-webkit-full-screen .tv {
+    grid-area: screen;
+    width: 100%;
+  }
+
+  .play-shell:fullscreen .controller,
+  .play-shell:-webkit-full-screen .controller {
+    grid-area: controls;
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .play-shell:fullscreen #screen,
+  .play-shell:-webkit-full-screen #screen {
+    width: 100%;
+    max-height: 85vh;
+  }
+}
+
+/* Portrait fallback */
+@media (orientation: portrait) and (max-width: 900px) {
+  .play-shell:fullscreen .rotate-hint,
+  .play-shell:-webkit-full-screen .rotate-hint {
+    display: block;
+  }
+
+  .play-shell:fullscreen #screen,
+  .play-shell:-webkit-full-screen #screen {
+    max-height: 40vh;
+  }
+
+  .play-shell:fullscreen .controller,
+  .play-shell:-webkit-full-screen .controller {
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .play-shell:fullscreen .center-buttons,
+  .play-shell:-webkit-full-screen .center-buttons {
+    grid-column: 1 / -1;
+    grid-auto-flow: column;
+    justify-content: center;
+  }
+}

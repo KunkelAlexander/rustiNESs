@@ -41,40 +41,46 @@ A9 42
       </section>
 
       <section class="card mode-nes">
-        <div class="tv">
-            <canvas id="screen" width="256" height="240"></canvas>
-            <div class="power-led"></div>
-        </div>  
-
-        <div class="row">
-          <input type="file" id="romLoader" accept=".nes" hidden />
-          <button id="btnLoadROM" class="primary">Load ROM</button>
-        </div>
-
-        
-        <div class="controller">
-          <div class="dpad">
-            <button class="pad-btn" data-btn="up">▲</button>
-            <div class="dpad-mid">
-              <button class="pad-btn" data-btn="left">◀</button>
-              <div></div>
-              <button class="pad-btn" data-btn="right">▶</button>
+        <div class="play-shell" id="playShell">
+          <div class="play-topbar">
+            <div class="row play-actions">
+              <input type="file" id="romLoader" accept=".nes" hidden />
+              <button id="btnLoadROM" class="primary">Load ROM</button>
+              <button id="btnFullscreen">Fullscreen</button>
             </div>
-            <button class="pad-btn" data-btn="down">▼</button>
           </div>
 
-          <div class="center-buttons">
-            <button class="pad-btn small" data-btn="a">Select</button>
-            <button class="pad-btn small" data-btn="s">Start</button>
+          <div class="rotate-hint" id="rotateHint">
+            Rotate your device for the best NES experience
           </div>
 
-          <div class="ab-buttons">
-            <button class="pad-btn action" data-btn="z">B</button>
-            <button class="pad-btn action" data-btn="x">A</button>
+          <div class="tv">
+            <canvas id="screen" width="256" height="240" tabindex="0"></canvas>
+            <div class="power-led"></div>
+          </div>
+
+          <div class="controller" id="touchController">
+            <div class="dpad">
+              <button class="pad-btn" data-btn="up">▲</button>
+              <div class="dpad-mid">
+                <button class="pad-btn" data-btn="left">◀</button>
+                <div></div>
+                <button class="pad-btn" data-btn="right">▶</button>
+              </div>
+              <button class="pad-btn" data-btn="down">▼</button>
+            </div>
+
+            <div class="center-buttons">
+              <button class="pad-btn small" data-btn="a">Select</button>
+              <button class="pad-btn small" data-btn="s">Start</button>
+            </div>
+
+            <div class="ab-buttons">
+              <button class="pad-btn action" data-btn="z">B</button>
+              <button class="pad-btn action" data-btn="x">A</button>
+            </div>
           </div>
         </div>
-
-
       </section>
 
 

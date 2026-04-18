@@ -282,10 +282,13 @@ function setButtonState(name, pressed) {
 
 function keyToButton(code) {
   switch (code) {
-    case "KeyX": return "x";       // NES A
-    case "KeyZ": return "z";       // NES B
-    case "KeyA": return "a";       // Select
-    case "KeyS": return "s";       // Start
+    case "KeyX": return "x";            // NES A
+    case "KeyZ": return "z";            // NES B
+    case "Enter": return "s";           // Start
+    case "ShiftRight":
+    case "Backspace": return "a";       // Select
+    case "KeyA": return "a";            // keep old mapping too
+    case "KeyS": return "s";            // keep old mapping too
     case "ArrowUp": return "up";
     case "ArrowDown": return "down";
     case "ArrowLeft": return "left";
@@ -293,6 +296,26 @@ function keyToButton(code) {
     default: return null;
   }
 }
+
+function releaseAllButtons() {
+  for (const key in controller1) {
+    controller1[key] = 0;
+  }
+  syncController();
+
+  document.querySelectorAll("[data-btn]").forEach((el) => {
+    el.classList.remove("pressed");
+  });
+}
+
+window.addEventListener("blur", releaseAllButtons);
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) releaseAllButtons();
+});
+document.addEventListener("fullscreenchange", () => {
+  if (!isFullscreen()) releaseAllButtons();
+});
+
 
 function renderPatternTableToCanvas(buffer, imageData, ctx) {
   if (!buffer || !imageData || !ctx) return;
@@ -388,10 +411,35 @@ function switchMode(btn) {
     log(`Switched to 6502 Lab mode`);
     loadProgram();
   }
+}
 
+function isFullscreen() {
+  return document.fullscreenElement || document.webkitFullscreenElement;
+}
 
+async function toggleFullscreen() {
+  const shell = $("playShell");
+  if (!shell) return;
 
+  try {
+    if (!isFullscreen()) {
+      if (shell.requestFullscreen) {
+        await shell.requestFullscreen();
+      } else if (shell.webkitRequestFullscreen) {
+        await shell.webkitRequestFullscreen();
+      }
+    } else {
+      if (document.exitFullscreen) {
+        await document.exitFullscreen();
+      } else if (document.webkitExitFullscreen) {
+        await document.webkitExitFullscreen();
+      }
+    }
 
+    focusGameSurface();
+  } catch (e) {
+    log(`Fullscreen failed: ${e.message || e}`);
+  }
 }
 
 // --- Button wiring ---
@@ -441,6 +489,8 @@ function bindUI() {
     $("romLoader").click();
   });
 
+  $("btnFullscreen")?.addEventListener("click", toggleFullscreen);
+
   $("romLoader").addEventListener("change", async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -473,8 +523,10 @@ function bindUI() {
 
     const press = (e) => {
       e.preventDefault();
+      btnEl.setPointerCapture?.(e.pointerId);
       btnEl.classList.add("pressed");
       setButtonState(btnName, true);
+      focusGameSurface();
     };
 
     const release = (e) => {
@@ -486,20 +538,14 @@ function bindUI() {
     btnEl.addEventListener("pointerdown", press);
     btnEl.addEventListener("pointerup", release);
     btnEl.addEventListener("pointercancel", release);
-    btnEl.addEventListener("pointerleave", release);
-  });
-
-
-  window.addEventListener("pointerup", () => {
-    for (const key in controller1) {
-      controller1[key] = 0;
-    }
-    syncController();
-
-    document.querySelectorAll("[data-btn]").forEach((el) => {
-      el.classList.remove("pressed");
+    btnEl.addEventListener("lostpointercapture", release);
+    btnEl.addEventListener("pointerleave", (e) => {
+      if (e.pointerType === "mouse") release(e);
     });
   });
+
+
+  window.addEventListener("pointerup", releaseAllButtons);
 
 
 
