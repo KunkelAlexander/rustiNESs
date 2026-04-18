@@ -3,29 +3,111 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>NES Emulator Dashboard</title>
+    <title>rustiNESs — NES Emulator</title>
     <link rel="stylesheet" href="./style.css" />
   </head>
 
   <body data-mode="nes">
     <header class="topbar">
-      <div>
+      <div class="topbar-brand">
         <h1>rustiNESs</h1>
         <p class="sub">NES emulator written in Rust based on javidx9's wonderful video</p>
       </div>
 
-      <div class="mode-switch">
-        <button data-mode="nes" class="active">NES Console</button>
-        <button data-mode="cpu">6052 Lab</button>
-      </div>
-    
+      <nav class="mode-switch" aria-label="Mode selector">
+        <button data-mode="nes" class="active" aria-pressed="true">NES Debug</button>
+        <button data-mode="cpu" aria-pressed="false">6502 Lab</button>
+        <button id="btnEnterFullscreen" class="fullscreen-btn" aria-label="Enter fullscreen mode">
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+            <path d="M1 1h4M1 1v4M14 1h-4M14 1v4M1 14h4M1 14v-4M14 14h-4M14 14v-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          Fullscreen
+        </button>
+      </nav>
+
       <div class="status">
         <span class="dot" id="statusDot"></span>
         <span id="statusText">Loading WASM…</span>
       </div>
     </header>
 
-    <main class="grid">
+    <!-- ══════════════════════════════════════════
+         FULLSCREEN OVERLAY  (mode = "fullscreen")
+    ══════════════════════════════════════════ -->
+    <div id="fullscreenOverlay" class="fs-overlay" aria-hidden="true" role="dialog" aria-label="Fullscreen NES">
+
+      <!-- Portrait warning (mobile only) -->
+      <div class="fs-portrait-warn" id="fsPortraitWarn" aria-live="polite">
+        <div class="fs-portrait-inner">
+          <svg class="rotate-icon" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+            <rect x="10" y="4" width="28" height="40" rx="4" stroke="currentColor" stroke-width="2.5"/>
+            <path d="M24 36v4M22 38h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <path d="M30 16 L38 24 L30 32" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <p>Rotate to landscape for the best experience</p>
+        </div>
+      </div>
+
+      <!-- Landscape content -->
+      <div class="fs-landscape" id="fsLandscape">
+
+        <!-- Left: D-pad -->
+        <div class="fs-ctrl-left" aria-label="D-pad">
+          <div class="dpad-cross">
+            <div class="dpad-row">
+              <button class="dpad-face up"   data-btn="up"    aria-label="Up">▲</button>
+            </div>
+            <div class="dpad-row dpad-middle">
+              <button class="dpad-face left"  data-btn="left"  aria-label="Left">◀</button>
+              <div class="dpad-center"></div>
+              <button class="dpad-face right" data-btn="right" aria-label="Right">▶</button>
+            </div>
+            <div class="dpad-row">
+              <button class="dpad-face down"  data-btn="down"  aria-label="Down">▼</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Center: screen + select/start -->
+        <div class="fs-center">
+          <canvas id="fsScreen" width="256" height="240" tabindex="0" aria-label="NES screen"></canvas>
+          <div class="fs-meta-row">
+            <button class="fs-meta-btn" data-btn="a" aria-label="Select">Select</button>
+            <button class="fs-exit-btn" id="fsExitBtn" aria-label="Exit fullscreen">✕ Exit</button>
+            <button class="fs-meta-btn" data-btn="s" aria-label="Start">Start</button>
+          </div>
+        </div>
+
+        <!-- Right: A/B buttons -->
+        <div class="fs-ctrl-right" aria-label="A and B buttons">
+          <div class="ab-cluster">
+            <button class="ab-btn b-btn" data-btn="z" aria-label="B button">B</button>
+            <button class="ab-btn a-btn" data-btn="x" aria-label="A button">A</button>
+          </div>
+        </div>
+
+        <!-- Desktop keyboard bindings overlay -->
+        <div class="fs-kb-guide" id="fsKbGuide" aria-label="Keyboard bindings">
+          <div class="kb-title">Keyboard</div>
+          <div class="kb-grid">
+            <span class="kb-key">↑↓←→</span><span class="kb-desc">D-pad</span>
+            <span class="kb-key">A</span><span class="kb-desc">NES A</span>
+            <span class="kb-key">F</span><span class="kb-desc">NES B</span>
+            <span class="kb-key">S</span><span class="kb-desc">Start</span>
+            <span class="kb-key">D</span><span class="kb-desc">Select</span>
+            <span class="kb-key">Esc</span><span class="kb-desc">Exit</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════
+         MAIN DEBUG LAYOUT
+    ══════════════════════════════════════════ -->
+    <main class="grid" id="debugMain">
+
+      <!-- Program editor (CPU mode) -->
       <section class="card mode-cpu">
         <h2>Program code</h2>
         <textarea id="asmInput" spellcheck="false">
@@ -33,184 +115,121 @@ A9 42
 8D 20 00
 4C 00 00
         </textarea>
-
         <div class="row">
           <button id="btnAssemble" class="primary">Load</button>
           <button id="btnReset">Reset</button>
         </div>
       </section>
 
+      <!-- NES ROM loader (NES mode) -->
       <section class="card mode-nes">
-        <div class="play-shell" id="playShell">
-          <div class="play-topbar">
-            <div class="row play-actions">
-              <input type="file" id="romLoader" accept=".nes" hidden />
-              <button id="btnLoadROM" class="primary">Load ROM</button>
-              <button id="btnFullscreen">Fullscreen</button>
-            </div>
-          </div>
-
-          
-          <button id="btnExitFullscreen" class="fs-exit" aria-label="Exit fullscreen">
-            Exit
-          </button>
-
-          <div class="rotate-hint" id="rotateHint">
-            Rotate your device for the best NES experience
-          </div>
-
-          <div class="tv">
-            <canvas id="screen" width="256" height="240" tabindex="0"></canvas>
-            <div class="power-led"></div>
-          </div>
-
-          <div class="controller" id="touchController">
-            <div class="dpad">
-              <button class="pad-btn" data-btn="up">▲</button>
-              <div class="dpad-mid">
-                <button class="pad-btn" data-btn="left">◀</button>
-                <div></div>
-                <button class="pad-btn" data-btn="right">▶</button>
-              </div>
-              <button class="pad-btn" data-btn="down">▼</button>
-            </div>
-
-            <div class="center-buttons">
-              <button class="pad-btn small" data-btn="a">Select</button>
-              <button class="pad-btn small" data-btn="s">Start</button>
-            </div>
-
-            <div class="ab-buttons">
-              <button class="pad-btn action" data-btn="z">B</button>
-              <button class="pad-btn action" data-btn="x">A</button>
-            </div>
-          </div>
+        <h2>NES Console</h2>
+        <div class="rom-zone">
+          <input type="file" id="romLoader" accept=".nes" hidden />
+          <button id="btnLoadROM" class="primary">Load ROM</button>
+          <canvas id="screen" width="256" height="240" tabindex="0" aria-label="NES output (debug)"></canvas>
+          <div class="power-led"></div>
         </div>
       </section>
-
 
       <!-- Controls -->
       <section class="card">
         <h2>Controls</h2>
-
         <div class="controls">
           <button id="btnStep" class="primary">Step Instruction</button>
           <button id="btnClock">Clock (1 cycle)</button>
           <button id="btnRun">Run</button>
           <button id="btnPause">Pause</button>
         </div>
-
-        <div class="log" id="log"></div>
+        <div class="log" id="log" aria-live="polite" aria-label="Event log"></div>
       </section>
 
-      <!-- Registers -->
+      <!-- CPU registers -->
       <section class="card">
         <h2>CPU status</h2>
-
         <div class="kv">
-            <div class="k">A</div><div class="v" id="a">--</div>
-            <div class="k">X</div><div class="v" id="x">--</div>
-            <div class="k">Y</div><div class="v" id="y">--</div>
-            <div class="k highlight-pc">PC</div><div class="v highlight-pc" id="pc">----</div>
-            <div class="k">SP</div><div class="v" id="sp">--</div>
-            <div class="k">STATUS</div><div class="v" id="status">--------</div>
-
-            <hr style="grid-column: 1 / -1; opacity: 0.2; margin: 10px 0;">
-
-            <div class="k">FETCHED</div><div class="v" id="fetched">--</div>
-            <div class="k highlight-addr">ADDR_ABS</div><div class="v highlight-addr" id="addr_abs">----</div>
-            <div class="k">ADDR_REL</div><div class="v" id="addr_rel">----</div>
-            <div class="k">OPCODE</div><div class="v" id="opcode">--</div>
-            <div class="k">CYCLES</div><div class="v" id="cycles">----</div>
-
+          <div class="k">A</div><div class="v" id="a">--</div>
+          <div class="k">X</div><div class="v" id="x">--</div>
+          <div class="k">Y</div><div class="v" id="y">--</div>
+          <div class="k highlight-pc">PC</div><div class="v highlight-pc" id="pc">----</div>
+          <div class="k">SP</div><div class="v" id="sp">--</div>
+          <div class="k">STATUS</div><div class="v" id="status">--------</div>
+          <hr style="grid-column:1/-1;opacity:.2;margin:10px 0">
+          <div class="k">FETCHED</div><div class="v" id="fetched">--</div>
+          <div class="k highlight-addr">ADDR_ABS</div><div class="v highlight-addr" id="addr_abs">----</div>
+          <div class="k">ADDR_REL</div><div class="v" id="addr_rel">----</div>
+          <div class="k">OPCODE</div><div class="v" id="opcode">--</div>
+          <div class="k">CYCLES</div><div class="v" id="cycles">----</div>
         </div>
       </section>
 
+      <!-- PPU / pattern tables (NES mode) -->
       <section class="card mode-nes">
         <h2>PPU status</h2>
-
         <div class="gpu-toolbar">
           <label class="pattern-label" for="paletteSelect">
             Palette
             <select id="paletteSelect">
-              <option value="0">0</option>
-              <option value="1">1</option>
-              <option value="2">2</option>
-              <option value="3">3</option>
-              <option value="4">4</option>
-              <option value="5">5</option>
-              <option value="6">6</option>
-              <option value="7">7</option>
+              <option value="0">0</option><option value="1">1</option>
+              <option value="2">2</option><option value="3">3</option>
+              <option value="4">4</option><option value="5">5</option>
+              <option value="6">6</option><option value="7">7</option>
             </select>
           </label>
         </div>
-
         <div class="pattern-grid">
           <div class="pattern-card">
             <div class="sub">Pattern Table 0</div>
             <canvas id="pattern0" width="128" height="128"></canvas>
           </div>
-
           <div class="pattern-card">
             <div class="sub">Pattern Table 1</div>
             <canvas id="pattern1" width="128" height="128"></canvas>
           </div>
         </div>
       </section>
-      
-  <!-- RAM + Beginner Panel -->
-  <section class="card wide mode-cpu">
-    <h2>RAM</h2>
 
-    <div class="ram-wrap">
-      <div class="ram-scroll" aria-label="RAM scroll">
-        <div class="ram" id="ramGrid"></div>
-      </div>
-
-
-      <aside class="learn" aria-label="Beginner explanation">
-        <h3>What the 6502 is doing</h3>
-
-        <p>
-          The 6502 is a tiny CPU. It repeatedly:
-          <strong>fetches</strong> a byte from memory (an instruction),
-          <strong>decodes</strong> what it means, then <strong>executes</strong> it.
-        </p>
-
-        <div class="learn-block">
-          <h4>Key ideas</h4>
-          <ul>
-            <li><strong>RAM</strong> is just a big list of bytes (00–FF) at addresses (0000–FFFF).</li>
-            <li><strong>PC</strong> (Program Counter) is “where the next instruction lives.”</li>
-            <li><strong>A</strong> is the main working register (“the CPU’s hand”).</li>
-            <li><strong>Fetch → Decode → Execute</strong> happens over several <strong>cycles</strong>.</li>
-          </ul>
+      <!-- RAM + Beginner Panel (CPU mode) -->
+      <section class="card wide mode-cpu">
+        <h2>RAM</h2>
+        <div class="ram-wrap">
+          <div class="ram-scroll" aria-label="RAM contents">
+            <div class="ram" id="ramGrid"></div>
+          </div>
+          <aside class="learn" aria-label="Beginner explanation">
+            <h3>What the 6502 is doing</h3>
+            <p>The 6502 is a tiny CPU. It repeatedly: <strong>fetches</strong> a byte from memory, <strong>decodes</strong> what it means, then <strong>executes</strong> it.</p>
+            <div class="learn-block">
+              <h4>Key ideas</h4>
+              <ul>
+                <li><strong>RAM</strong> is just a big list of bytes (00–FF) at addresses (0000–FFFF).</li>
+                <li><strong>PC</strong> (Program Counter) is "where the next instruction lives."</li>
+                <li><strong>A</strong> is the main working register ("the CPU's hand").</li>
+                <li><strong>Fetch → Decode → Execute</strong> happens over several <strong>cycles</strong>.</li>
+              </ul>
+            </div>
+            <div class="learn-block">
+              <h4>This demo program</h4>
+              <ol>
+                <li><code>A9 42</code> = <strong>LDA #$42</strong> → put 42 into <strong>A</strong></li>
+                <li><code>8D 20 00</code> = <strong>STA $0020</strong> → write <strong>A</strong> into RAM at <code>$0020</code></li>
+                <li><code>4C 00 00</code> = <strong>JMP $0000</strong> → set <strong>PC</strong> back to <code>$0000</code> (loop)</li>
+              </ol>
+              <p class="muted">Result: RAM at <code>$0020</code> becomes <code>42</code> and stays that way.</p>
+            </div>
+            <div class="learn-block">
+              <h4>What to watch</h4>
+              <ul>
+                <li><strong>PC highlight</strong> shows where the CPU reads next.</li>
+                <li><strong>OPCODE</strong> shows the current instruction byte.</li>
+                <li><strong>ADDR_ABS</strong> shows the computed memory address.</li>
+                <li><strong>A</strong> should become <code>42</code> after the first step.</li>
+              </ul>
+            </div>
+          </aside>
         </div>
+      </section>
 
-        <div class="learn-block">
-          <h4>This demo program</h4>
-          <ol>
-            <li><code>A9 42</code> = <strong>LDA #$42</strong> → put 42 into <strong>A</strong></li>
-            <li><code>8D 20 00</code> = <strong>STA $0020</strong> → write <strong>A</strong> into RAM at <code>$0020</code></li>
-            <li><code>4C 00 00</code> = <strong>JMP $0000</strong> → set <strong>PC</strong> back to <code>$0000</code> (loop)</li>
-          </ol>
-          <p class="muted">
-            Result: RAM at <code>$0020</code> becomes <code>42</code> and stays that way, while the PC loops forever.
-          </p>
-        </div>
-
-        <div class="learn-block">
-          <h4>What to watch in the control panel?</h4>
-          <ul>
-            <li><strong>PC highlight</strong> shows where the CPU is reading next.</li>
-            <li><strong>OPCODE</strong> shows the current instruction byte (like A9 / 8D / 4C).</li>
-            <li><strong>ADDR_ABS</strong> shows the computed memory address (like 0020).</li>
-            <li><strong>A</strong> should become <code>42</code> after the first step.</li>
-          </ul>
-        </div>
-      </aside>
-    </div>
-  </section>
     </main>
 
     <script type="module" src="./main.js"></script>
