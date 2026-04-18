@@ -549,7 +549,7 @@ impl PpuInterface for Olc2c02 {
             // If the cartridge cant map the address, have
             // a physical location ready here
             let table  = (addr & 0x1000) >> 12; // 0 or 1
-            let offset =  addr & 0x0FFF;        // 0..4095
+            let offset = addr & 0x0FFF;        // 0..4095
             return Some(self.table_pattern[(table * 4096 + offset) as usize]);
         }
         else if addr >= 0x2000 && addr <= 0x3EFF

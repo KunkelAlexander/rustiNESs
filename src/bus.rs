@@ -105,16 +105,20 @@ impl Bus {
         self.cartridge = cartridge;
     }
     
-    pub fn set_controller(&mut self, i: usize, x: u8, z: u8, a: u8, s: u8, up: u8, down: u8, left: u8, right: u8) {
+    pub fn set_controller(&mut self, i: usize, x: bool, z: bool, a: bool, s: bool, up: bool, down: bool, left: bool, right: bool) {
+        // Only two controllers :/ 
+        if i > 1 {
+            return; 
+        }
         self.controller[i]  = 
-          x     * (1 << 7) 
-        + z     * (1 << 6) 
-        + a     * (1 << 5) 
-        + s     * (1 << 4) 
-        + up    * (1 << 3) 
-        + down  * (1 << 2) 
-        + left  * (1 << 1) 
-        + right * (1 << 0);
+          (x     as u8) * (1 << 7) 
+        + (z     as u8) * (1 << 6) 
+        + (a     as u8) * (1 << 5) 
+        + (s     as u8) * (1 << 4) 
+        + (up    as u8) * (1 << 3) 
+        + (down  as u8) * (1 << 2) 
+        + (left  as u8) * (1 << 1) 
+        + (right as u8) * (1 << 0);
     } 
 }
 

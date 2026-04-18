@@ -10,7 +10,7 @@ This project aims to incrementally emulate the original NES hardware, starting w
 
 
 - Watch [ NES Emulator Part #5: PPU - Foreground Rendering ](https://www.youtube.com/watch?v=cksywUTZxlY)
-- Implement controller input 
+
 
 - 8 NES buttons are represented via one byte
 - Two controller ports mapped to addresses $4016 and $4017
@@ -19,6 +19,11 @@ This project aims to incrementally emulate the original NES hardware, starting w
 - To fully read the state of the controller, the CPU must write to the memory map register and read 8 times 
 
 ![](figures/27.png)
+
+- Implement controller input - it works nicely for the `nestest.nes` ROM in the main menu, but then it gets stuck - I suspect that there is still a bug in the CPU emulation
+
+![](figures/28.png)
+
 
 
 
