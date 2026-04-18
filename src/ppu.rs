@@ -4,9 +4,9 @@ pub const SCREEN_W: usize = 256;
 pub const SCREEN_H: usize = 240;
 
 
-// Javidx9 goes via bitfields here but the bit gymnastics are bit too much for me
-// I prefer to keep it a little simpler and less efficient, especially for the clock function
-#[derive(Copy, Clone)]
+// Javidx9 goes via bitfields here but the bit gymnastics in Rust are bit too much for me
+// The following is much nicer than operating on a single u8 in Rust 
+#[derive(Copy, Clone, Default)]
 struct Loopy {
     coarse_x:    u8,      // 0..31
     coarse_y:    u8,      // 0..31
@@ -32,6 +32,64 @@ impl Loopy {
             | ((self.nametable_x as u16) << 10)
             | ((self.nametable_y as u16) << 11)
             | ((self.fine_y      as u16) << 12)
+    }
+}
+
+#[derive(Copy, Clone, Default)]
+struct Sprite {
+    x:         u8, 
+    y:         u8,
+    id:        u8, // tile id from pattern memory
+    attribute: u8, // how should sprite be rendered
+}
+
+impl Sprite {
+    fn read_byte(&self, offset: u8) -> u8 {
+        match offset {
+            0 => self.y,
+            1 => self.id,
+            2 => self.attribute,
+            3 => self.x,
+            _ => unreachable!(),
+        }
+    }
+
+    fn write_byte(&mut self, offset: u8, data: u8) {
+        match offset {
+            0 => self.y         = data,
+            1 => self.id        = data,
+            2 => self.attribute = data,
+            3 => self.x         = data,
+            _ => unreachable!(),
+        }
+    }
+}
+
+#[derive(Copy, Clone)]
+pub struct OAM {
+    sprites: [Sprite; 64],    
+}
+
+impl OAM {
+    
+    fn default() -> Self {
+        Self {
+            sprites: [Sprite::default(); 64],
+        }
+    }
+
+    pub fn write(&mut self, addr: u8, data: u8) {
+        let index = (addr / 4) as usize;
+        let offset   =  addr % 4;
+
+        self.sprites[index].write_byte(offset, data);
+    }
+
+    pub fn read(&self, addr: u8) -> u8 {
+        let index = (addr / 4) as usize;
+        let offset   =  addr % 4;
+
+        self.sprites[index].read_byte(offset)
     }
 }
 
@@ -67,6 +125,11 @@ pub struct Olc2c02 {
     bg_next_tile_msb:       u8,
     bg_next_tile_id:        u8,
     bg_next_tile_attrib:    u8,
+
+    // Sprite memory
+    // public because we need access from the bus for the DMA operation
+    pub oam:                OAM,
+    pub oam_addr:           u8
 }
 
 impl Olc2c02 {
@@ -118,8 +181,8 @@ impl Olc2c02 {
             status:                 0x00,
             mask:                   0x00,
             control:                0x00,
-            vram_addr:              Loopy::from_u16(0),
-            tram_addr:              Loopy::from_u16(0),
+            vram_addr:              Loopy::default(),
+            tram_addr:              Loopy::default(),
             fine_x:                 0x00,
             address_latch:          0x00, 
             ppu_data_buffer:        0x00, 
@@ -132,6 +195,8 @@ impl Olc2c02 {
             bg_next_tile_msb:       0x00,
             bg_next_tile_id:        0x00,
             bg_next_tile_attrib:    0x00,
+            oam:                    OAM::default(),
+            oam_addr:               0x00,
         }
     }
 
@@ -321,21 +386,21 @@ impl Olc2c02 {
             let p1_pixel = ((self.bg_shifter_pattern_hi & bit_mux) > 0) as u8;
 
             // Combine to form pixel index
-            bg_pixel = (p1_pixel << 1) | p0_pixel;
+            bg_pixel         = (p1_pixel << 1) | p0_pixel;
 
             // Get palette
             let bg_pal0  = ((self.bg_shifter_attrib_lo & bit_mux) > 0) as u8;
             let bg_pal1  = ((self.bg_shifter_attrib_hi & bit_mux) > 0) as u8;
-            bg_palette = (bg_pal1 << 1) | bg_pal0;
+            bg_palette       = (bg_pal1 << 1) | bg_pal0;
 
-            colour = self.get_colour_from_palette_ram(bg_palette, bg_pixel, cartridge).unwrap_or(0);
+            colour           = self.get_colour_from_palette_ram(bg_palette, bg_pixel, cartridge).unwrap_or(0);
 
         } else {
             self.noise_state ^= self.noise_state << 13;
             self.noise_state ^= self.noise_state >> 17;
             self.noise_state ^= self.noise_state << 5;
 
-            colour = (self.noise_state & 0xFF) as u8;
+            colour            = (self.noise_state & 0xFF) as u8;
         }
 
         if self.scanline < 240 && self.cycle >= 1 && self.cycle <= 256 {
@@ -379,14 +444,19 @@ impl PpuInterface for Olc2c02 {
         let data = match addr {
          0x0000 => 0x00, // Control
          0x0001 => 0x00, // Mask
+         // Status
          0x0002 => {
             let temp = (self.status & 0xE0) | (self.ppu_data_buffer & 0x1F);
             self.status &= !Olc2c02::STATUS_VERTICAL_BLANK;
             self.address_latch = 0; 
             temp
-         }, // Status
-         0x0003 => 0x00, // OAM Address
-         0x0004 => 0x00, // OAM Data
+         }, 
+         // OAM Address - reading from here does not make sense as the CPU does not care about the OAM address
+         0x0003 => 0x00,
+         // OAM Data
+         0x0004 => {
+            return self.oam.read(self.oam_addr);
+         }, 
          0x0005 => 0x00, // Scroll
          0x0006 => 0x00, // PPU Address
          0x0007 => {
@@ -423,10 +493,15 @@ impl PpuInterface for Olc2c02 {
             self.mask = data;
          }, 
          0x0002 => {}, // Status
-         0x0003 => {}, // OAM Address
-         0x0004 => {}, // OAM Data
+         // OAM Address
+         0x0003 => {
+            self.oam_addr = data;
+         }, 
+         // OAM Data
+         0x0004 => {
+            self.oam.write(self.oam_addr, data); 
+         }, 
          0x0005 => {
-            
             if self.address_latch == 0 {
                 self.fine_x             = data & 0b111; // first three bits of data
                 self.tram_addr.coarse_x = data >> 3;    // bits 4-8
@@ -434,7 +509,7 @@ impl PpuInterface for Olc2c02 {
             } else {
                 self.tram_addr.fine_y   = data & 0b111; // first three bits of data
                 self.tram_addr.coarse_y = data >> 3;    // bits 4-8
-                self.address_latch   = 0;
+                self.address_latch      = 0;
             }
 
          }, // Scroll
@@ -473,8 +548,8 @@ impl PpuInterface for Olc2c02 {
         {
             // If the cartridge cant map the address, have
             // a physical location ready here
-            let table = (addr & 0x1000) >> 12; // 0 or 1
-            let offset = addr & 0x0FFF;        // 0..4095
+            let table  = (addr & 0x1000) >> 12; // 0 or 1
+            let offset =  addr & 0x0FFF;        // 0..4095
             return Some(self.table_pattern[(table * 4096 + offset) as usize]);
         }
         else if addr >= 0x2000 && addr <= 0x3EFF

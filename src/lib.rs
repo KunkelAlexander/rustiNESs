@@ -15,9 +15,8 @@ use crate::cartridge::{EmptyCartridge, Cartridge};
 
 #[wasm_bindgen]
 pub struct NES {
-    cpu: Olc6502,
-    bus: Bus,
-
+    cpu:                  Olc6502,
+    bus:                  Bus,
     system_clock_counter: u32,
 }
 
@@ -28,7 +27,7 @@ impl NES {
         Self {
             cpu:                  Olc6502::new(),
             bus:                  Bus::new(Box::new(EmptyCartridge)),
-            system_clock_counter: 0
+            system_clock_counter: 0,
         }
     }
 
@@ -46,7 +45,43 @@ impl NES {
         self.bus.clock();
 
         if self.system_clock_counter % 3 == 0 {
-            self.cpu.clock(&mut self.bus);
+            // Once a DMA transfer is requested, we wait until the correct clock cycle required by the hardware and then start the transfer
+            // We read on even cycles and write on odd cycles until we are done
+            if self.bus.dma_transfer {
+                if self.bus.dma_dummy {
+                    if self.system_clock_counter % 2 == 1 {
+                        self.bus.dma_dummy = false;
+                    }
+                }
+                else // if self.bus.dma_dummy
+                {
+                    // On even cycles, read data from the CPU 
+                    if self.system_clock_counter % 2 == 0 {
+                        let addr     = ((self.bus.dma_page as u16) << 8) | self.bus.dma_addr as u16;
+                        let data      = self.cpu.read(&mut self.bus, addr);
+                        self.bus.dma_data = data;
+                    }
+                    // On odd cycles, write to the PPU's memory 
+                    else {
+                        let addr      = self.bus.dma_addr;
+                        let data      = self.bus.dma_data;
+                        self.bus.ppu.oam.write(addr, data); 
+                        self.bus.dma_addr = self.bus.dma_addr.wrapping_add(1);
+
+                        // We know that the transfer has finished if dma_addr is zero again because it has wrapped around after 256 cycles
+                        if self.bus.dma_addr == 0x00 {
+                            self.bus.dma_transfer = false; 
+                            self.bus.dma_dummy    = false;
+                        }
+
+                    }
+
+                }                
+            } 
+            else // if self.bus.dma_transfer {
+            {
+                self.cpu.clock(&mut self.bus);
+            }
         }
 
         if self.bus.ppu.nmi {

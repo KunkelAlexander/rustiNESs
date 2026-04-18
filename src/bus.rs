@@ -49,6 +49,14 @@ pub struct Bus {
     cartridge:            Box<dyn CartridgeInterface>,
     pub controller:       [u8; 2], // this needs to be set externally
     controller_state:     [u8; 2], // store snapshots of the inputs when the corresponding memory address is written to. 
+
+    
+    // DMA
+    pub dma_page:         u8, 
+    pub dma_addr:         u8, 
+    pub dma_data:         u8, 
+    pub dma_transfer:     bool, 
+    pub dma_dummy:        bool, 
 }
 
 impl Bus {
@@ -56,11 +64,17 @@ impl Bus {
         cartridge: Box<dyn CartridgeInterface>,
     ) -> Self {
         Self {
-            cpu_ram: [0; 2048],
-            ppu: Olc2c02::new(),
-            cartridge: cartridge,
-            controller: [0; 2],
-            controller_state: [0; 2]
+            cpu_ram:             [0; 2048],
+            ppu:                 Olc2c02::new(),
+            cartridge:           cartridge,
+            controller:          [0; 2],
+            controller_state:    [0; 2],
+            // DMA
+            dma_page:             0x00,
+            dma_addr:             0x00,
+            dma_data:             0x00,
+            dma_transfer:         false, 
+            dma_dummy:            false,
         }
     }
 
@@ -90,7 +104,6 @@ impl Bus {
     pub fn insert_cartridge(&mut self, cartridge: Box<dyn CartridgeInterface>) {
         self.cartridge = cartridge;
     }
-
     
     pub fn set_controller(&mut self, i: usize, x: u8, z: u8, a: u8, s: u8, up: u8, down: u8, left: u8, right: u8) {
         self.controller[i]  = 
@@ -144,6 +157,13 @@ impl BusInterface for Bus {
         else if (addr >= 0x2000 && addr <= 0x3FFF)
         {
             self.ppu.write_cpu(addr & 0x0007, data, self.cartridge.as_mut());
+        }
+        // DMA - Start DMA transfer in bus when this address is written to 
+        else if addr == 0x4014 
+        {
+            self.dma_page     = data; 
+            self.dma_addr     = 0x00; 
+            self.dma_transfer = true;
         }
         // Copy external controller state into internal register
         else if (addr >= 0x4016 && addr <= 0x4017)
