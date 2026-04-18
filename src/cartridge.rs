@@ -32,10 +32,8 @@ impl CartridgeInterface for EmptyCartridge {
     fn read_ppu(& self, addr: u16) -> Option<u8>                {None}
     fn write_ppu(&mut self, addr: u16, data: u8) -> Option<()>  {None}
     fn map_nametable_addr(&self, addr: u16) -> u16              {0}
+    fn reset(&mut self)                                         {}
 }
-
-
-
 
 pub struct Cartridge {
     v_prg_memory: Vec<u8>,
@@ -49,6 +47,7 @@ pub struct Cartridge {
 
 impl Cartridge {
 
+    
     pub fn from_bytes(data: &[u8]) -> Result<Self, String> {
         if data.len() < 16 {
             return Err("File too small".into())
@@ -170,6 +169,10 @@ impl CartridgeInterface for Cartridge {
             MIRROR::OnescreenLo =>         offset & 0x03FF,    // all -> page 0
             MIRROR::OnescreenHi => 1024 + (offset & 0x03FF),   // all -> page 1
         }
+    }
+    
+    fn reset(&mut self) {
+        self.mapper.reset();
     }
 }
 

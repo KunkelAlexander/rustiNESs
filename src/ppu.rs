@@ -435,6 +435,32 @@ impl Olc2c02 {
             1
         }
     }
+
+    pub fn reset(&mut self) {
+        self.scanline               = 0;
+        self.cycle                  = 0;
+        self.frame_complete         = false;
+        self.noise_state            = 0x12345678;
+        self.status                 = 0x00;
+        self.mask                   = 0x00;
+        self.control                = 0x00;
+        self.vram_addr              = Loopy::default();
+        self.tram_addr              = Loopy::default();
+        self.fine_x                 = 0x00;
+        self.address_latch          = 0x00; 
+        self.ppu_data_buffer        = 0x00; 
+        self.nmi                    = false; 
+        self.bg_shifter_pattern_hi  = 0x0000;
+        self.bg_shifter_pattern_lo  = 0x0000;
+        self.bg_shifter_attrib_hi   = 0x0000;
+        self.bg_shifter_attrib_lo   = 0x0000;
+        self.bg_next_tile_lsb       = 0x00;
+        self.bg_next_tile_msb       = 0x00;
+        self.bg_next_tile_id        = 0x00;
+        self.bg_next_tile_attrib    = 0x00;
+        self.oam                    = OAM::default();
+        self.oam_addr               = 0x00;
+    }
 }
 
 

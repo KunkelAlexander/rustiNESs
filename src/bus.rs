@@ -74,7 +74,7 @@ impl Bus {
             dma_addr:             0x00,
             dma_data:             0x00,
             dma_transfer:         false, 
-            dma_dummy:            false,
+            dma_dummy:            true,
         }
     }
 
@@ -93,8 +93,16 @@ impl Bus {
     pub fn get_name_table(&self) -> Vec<u8> {
         self.ppu.get_name_table()
     }
-    // Does not set RAM to zero
+    
     pub fn reset(&mut self) {
+        self.ppu.reset(); 
+        self.cartridge.reset();
+        
+        self.dma_page     = 0x00;
+        self.dma_addr     = 0x00;
+        self.dma_data     = 0x00;
+        self.dma_transfer = false;
+        self.dma_dummy    = true;
     }
 
     pub fn clock(&mut self) {

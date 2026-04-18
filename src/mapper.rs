@@ -53,4 +53,8 @@ impl MapperInterface for Mapper000 {
             None
         }
     }
+
+    fn reset(&mut self) {
+        return;
+    }
 }

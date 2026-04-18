@@ -60,7 +60,7 @@ impl Nes {
                         // We know that the transfer has finished if dma_addr is zero again because it has wrapped around after 256 cycles
                         if self.bus.dma_addr == 0x00 {
                             self.bus.dma_transfer = false; 
-                            self.bus.dma_dummy    = false;
+                            self.bus.dma_dummy    = true;
                         }
 
                     }
@@ -148,7 +148,7 @@ impl Nes {
     pub fn get_pattern_table(&self, table: u8, palette: u8) -> Vec<u8> {
         self.bus.get_pattern_table(table, palette)
     }
-    
+
     pub fn get_name_table(&self) -> Vec<u8> {
         self.bus.get_name_table()
     }

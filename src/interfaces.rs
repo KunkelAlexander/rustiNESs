@@ -21,6 +21,7 @@ pub trait CartridgeInterface {
     fn read_ppu (&    self, addr: u16          ) -> Option<u8>; 
     fn write_ppu(&mut self, addr: u16, data: u8) -> Option<()>; 
     fn map_nametable_addr(&self, addr: u16)      -> u16;
+    fn reset(&mut self);
 }
 
 pub trait MapperInterface {
@@ -28,4 +29,5 @@ pub trait MapperInterface {
     fn cpu_map_write(&mut self, addr: u16, data: u8) -> Option<usize>;
     fn ppu_map_read (&    self, addr: u16          ) -> Option<usize>;
     fn ppu_map_write(&mut self, addr: u16, data: u8) -> Option<usize>;
+    fn reset(&mut self);
 }
