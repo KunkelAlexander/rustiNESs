@@ -68,23 +68,27 @@
           </div>
         </div>
 
-        <!-- Center: screen + select/start -->
+        <!-- Center: screen only -->
         <div class="fs-center">
           <canvas id="fsScreen" width="256" height="240" tabindex="0" aria-label="NES screen"></canvas>
-          <div class="fs-meta-row">
-            <button class="fs-meta-btn" data-btn="a" aria-label="Select">Select</button>
-            <button class="fs-exit-btn" id="fsExitBtn" aria-label="Exit fullscreen">✕ Exit</button>
-            <button class="fs-meta-btn" data-btn="s" aria-label="Start">Start</button>
+        </div>
+
+        <!-- Right: A/B + Select/Start (mirrors real NES layout) -->
+        <div class="fs-ctrl-right" aria-label="A, B, Select and Start buttons">
+          <div class="ab-select-start">
+            <div class="ab-cluster">
+              <button class="ab-btn b-btn" data-btn="z" aria-label="B button">B</button>
+              <button class="ab-btn a-btn" data-btn="x" aria-label="A button">A</button>
+            </div>
+            <div class="ss-cluster">
+              <button class="ss-btn" data-btn="a" aria-label="Select">Select</button>
+              <button class="ss-btn" data-btn="s" aria-label="Start">Start</button>
+            </div>
           </div>
         </div>
 
-        <!-- Right: A/B buttons -->
-        <div class="fs-ctrl-right" aria-label="A and B buttons">
-          <div class="ab-cluster">
-            <button class="ab-btn b-btn" data-btn="z" aria-label="B button">B</button>
-            <button class="ab-btn a-btn" data-btn="x" aria-label="A button">A</button>
-          </div>
-        </div>
+        <!-- Exit button — fixed corner overlay -->
+        <button class="fs-exit-btn" id="fsExitBtn" aria-label="Exit fullscreen">✕ Exit</button>
 
         <!-- Desktop keyboard bindings overlay -->
         <div class="fs-kb-guide" id="fsKbGuide" aria-label="Keyboard bindings">

@@ -306,8 +306,17 @@ body[data-mode="fullscreen"] .topbar    { display: none; }
   inset: 0;
   background: #0a0a0a;
   z-index: 9999;
-  display: none;          /* shown by JS via body[data-mode="fullscreen"] */
+  display: none;
   overflow: hidden;
+}
+
+/* When this element IS the fullscreen root, fill the whole screen */
+.fs-overlay:fullscreen,
+.fs-overlay:-webkit-full-screen {
+  width: 100vw;
+  height: 100vh;
+  position: fixed;
+  inset: 0;
 }
 
 body[data-mode="fullscreen"] .fs-overlay {
@@ -391,7 +400,6 @@ body[data-mode="fullscreen"] .fs-overlay {
   justify-content: center;
   width: 100%;
   height: 100%;
-  gap: 10px;
 }
 
 /* Right column: A/B */
@@ -415,42 +423,58 @@ body[data-mode="fullscreen"] .fs-overlay {
   box-shadow: 0 0 0 2px #222, 0 0 40px rgba(0,0,0,.8);
 }
 
-/* Meta row: Select / Exit / Start */
-.fs-meta-row {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  justify-content: center;
-}
-
-.fs-meta-btn {
-  background: rgba(255,255,255,.1);
-  border: 1px solid rgba(255,255,255,.2);
-  color: rgba(255,255,255,.9);
-  border-radius: 999px;
-  padding: 8px 20px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background .15s, transform .05s;
-  touch-action: none;
-  user-select: none;
-}
-.fs-meta-btn:hover  { background: rgba(255,255,255,.18); }
-.fs-meta-btn:active,
-.fs-meta-btn.pressed { background: var(--accent); border-color: var(--accent); transform: scale(.95); }
-
+/* Exit button — top-right corner overlay */
 .fs-exit-btn {
+  position: absolute;
+  top: 14px;
+  right: 16px;
   background: rgba(255,255,255,.07);
   border: 1px solid rgba(255,255,255,.15);
   color: rgba(255,255,255,.5);
   border-radius: 999px;
-  padding: 7px 16px;
+  padding: 7px 14px;
   font-size: 12px;
   cursor: pointer;
   transition: background .15s, color .15s;
+  z-index: 10;
 }
 .fs-exit-btn:hover { background: rgba(255,60,50,.3); color: #fff; border-color: rgba(255,60,50,.5); }
+
+/* ── Right panel: A/B stacked above Select/Start ── */
+
+.ab-select-start {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+/* Select / Start pill buttons */
+.ss-cluster {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+}
+
+.ss-btn {
+  background: rgba(255,255,255,.1);
+  border: 1px solid rgba(255,255,255,.2);
+  color: rgba(255,255,255,.85);
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background .12s, transform .05s;
+  touch-action: none;
+  user-select: none;
+  min-width: 60px;
+  text-align: center;
+}
+.ss-btn:hover   { background: rgba(255,255,255,.18); }
+.ss-btn:active,
+.ss-btn.pressed { background: var(--accent); border-color: var(--accent); color: #fff; transform: scale(.94); }
 
 /* ── D-pad ─────────────────────────── */
 
@@ -597,7 +621,8 @@ body[data-mode="fullscreen"] .fs-overlay {
   .dpad-face { width: 44px; height: 44px; font-size: 14px; }
   .dpad-center { width: 38px; height: 38px; }
   .ab-btn { width: 56px; height: 56px; font-size: 16px; }
-  .fs-meta-btn { padding: 6px 14px; font-size: 12px; }
+  .ss-btn { padding: 5px 10px; font-size: 11px; min-width: 50px; }
+  .ab-select-start { gap: 8px; }
 }
 
 /* On desktop: hide touch controller side panels when no touch */

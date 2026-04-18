@@ -325,44 +325,78 @@ function switchDebugMode(btn) {
 
 // ── Fullscreen entry / exit ──────────────────────────
 
-function enterFullscreen() {
+async function enterFullscreen() {
   if (!emu) { log("No emulator loaded"); return; }
 
-  preFullscreenMode = mode; // remember where we came from
-  pauseRun();               // stop debug loop
-
+  preFullscreenMode = mode;
+  pauseRun();
   applyMode("fullscreen");
   releaseAllButtons();
 
-  // Focus the fullscreen canvas so keyboard events land
-  $("fsScreen")?.focus();
-  startRun();               // start clean fullscreen loop
+  // Request real OS/browser fullscreen on the overlay element.
+  // Must be called synchronously inside the user-gesture handler.
+  const el = $("fullscreenOverlay");
+  try {
+    if (el.requestFullscreen) {
+      await el.requestFullscreen({ navigationUI: "hide" });
+    } else if (el.webkitRequestFullscreen) {
+      await el.webkitRequestFullscreen();
+    }
+  } catch (e) {
+    // Browser denied (e.g. iframe sandbox) — overlay already visible, carry on.
+    log(`Native fullscreen unavailable: ${e.message ?? e}`);
+  }
 
+  $("fsScreen")?.focus();
+  startRun();
   log("Entered fullscreen mode");
 }
 
-function exitFullscreen() {
+function _leaveFullscreenMode() {
   if (mode !== "fullscreen") return;
-
   pauseRun();
   releaseAllButtons();
-
   applyMode(preFullscreenMode);
-
-  // Resume appropriate debug loop
   if (preFullscreenMode === "nes") {
     startRun();
   } else {
     loadProgram();
   }
-
-  // Return focus to whichever element makes sense
   $("screen")?.focus();
   log("Exited fullscreen mode");
 }
 
-// ── Keyboard exit (Escape) ───────────────────────────
+async function exitFullscreen() {
+  // Ask browser to leave native fullscreen; the fullscreenchange handler
+  // will call _leaveFullscreenMode() once the transition completes.
+  // If native fullscreen isn't active (e.g. it was denied), clean up directly.
+  const isNativeFs = document.fullscreenElement || document.webkitFullscreenElement;
+  if (isNativeFs) {
+    try {
+      if (document.exitFullscreen)       await document.exitFullscreen();
+      else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+    } catch (e) { /* ignore */ }
+    // _leaveFullscreenMode will be triggered by fullscreenchange
+  } else {
+    _leaveFullscreenMode();
+  }
+}
 
+// Sync our app state whenever the browser fullscreen state changes
+// (covers: Escape key, browser back button, swipe-up on Android, etc.)
+function onFullscreenChange() {
+  const isNativeFs = document.fullscreenElement || document.webkitFullscreenElement;
+  if (!isNativeFs && mode === "fullscreen") {
+    _leaveFullscreenMode();
+  }
+}
+document.addEventListener("fullscreenchange",       onFullscreenChange);
+document.addEventListener("webkitfullscreenchange", onFullscreenChange);
+
+// ── Keyboard exit (Escape) ───────────────────────────
+// Note: browsers fire Escape → fullscreenchange automatically for native
+// fullscreen, so _leaveFullscreenMode is called via that event.
+// This handler covers the non-native fallback case.
 window.addEventListener("keydown", (e) => {
   if (e.code === "Escape" && mode === "fullscreen") {
     exitFullscreen();
