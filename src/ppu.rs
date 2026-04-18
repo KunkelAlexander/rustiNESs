@@ -66,15 +66,23 @@ impl Sprite {
 }
 
 #[derive(Copy, Clone)]
-pub struct OAM {
-    sprites: [Sprite; 64],    
+pub struct SpriteArray<const N: usize> {
+    pub sprites: [Sprite; N],    
 }
 
-impl OAM {
+impl<const N: usize> Default for SpriteArray<N> {
+    fn default() -> Self {
+        Self {
+            sprites: [Sprite::default(); N],
+        }
+    }
+}
+
+impl<const N: usize> SpriteArray<N> {
     
     fn default() -> Self {
         Self {
-            sprites: [Sprite::default(); 64],
+            sprites: [Sprite::default(); N],
         }
     }
 
@@ -92,6 +100,9 @@ impl OAM {
         self.sprites[index].read_byte(offset)
     }
 }
+
+pub type OAM = SpriteArray<64>;
+pub type SpriteScanline = SpriteArray<8>; 
 
 pub struct Olc2c02 {
     screen:                [u8; SCREEN_H*SCREEN_W],   // Frame buffer
@@ -128,8 +139,15 @@ pub struct Olc2c02 {
 
     // Sprite memory
     // public because we need access from the bus for the DMA operation
-    pub oam:                OAM,
-    pub oam_addr:           u8
+    pub oam:               OAM,
+    pub oam_addr:          u8,
+
+    sprite_scanline:       SpriteScanline,
+    sprite_count:          u8,
+    sp_shifter_pattern_lo: [u8; 8], 
+    sp_shifter_pattern_hi: [u8; 8],
+    b_sp_0_being_rendered: bool,
+    b_sp_0_hit_possible:   bool
 }
 
 impl Olc2c02 {
@@ -169,34 +187,40 @@ impl Olc2c02 {
 
     pub fn new() -> Self {
         Self {     
-            screen:                 [0u8; SCREEN_H * SCREEN_W],
-            table_name:             [0u8; 2*1024], 
-            table_palette:          [0u8; 32],
-            table_pattern:          [0u8; 2*4096],    
-            sprite_name_table:      [0u8; SCREEN_H*SCREEN_W*2],
-            scanline:               0, 
-            cycle:                  0,
-            frame_complete:         false,
-            noise_state:            0x12345678,
-            status:                 0x00,
-            mask:                   0x00,
-            control:                0x00,
-            vram_addr:              Loopy::default(),
-            tram_addr:              Loopy::default(),
-            fine_x:                 0x00,
-            address_latch:          0x00, 
-            ppu_data_buffer:        0x00, 
-            nmi:                    false, 
-            bg_shifter_pattern_hi:  0x0000,
-            bg_shifter_pattern_lo:  0x0000,
-            bg_shifter_attrib_hi:   0x0000,
-            bg_shifter_attrib_lo:   0x0000,
-            bg_next_tile_lsb:       0x00,
-            bg_next_tile_msb:       0x00,
-            bg_next_tile_id:        0x00,
-            bg_next_tile_attrib:    0x00,
-            oam:                    OAM::default(),
-            oam_addr:               0x00,
+            screen:                 [0x00; SCREEN_H * SCREEN_W],
+            table_name:             [0x00; 2*1024], 
+            table_palette:          [0x00; 32],
+            table_pattern:          [0x00; 2*4096],    
+            sprite_name_table:      [0x00; SCREEN_H*SCREEN_W*2],
+            scanline:                0, 
+            cycle:                   0,
+            frame_complete:          false,
+            noise_state:             0x12345678,
+            status:                  0x00,
+            mask:                    0x00,
+            control:                 0x00,
+            vram_addr:               Loopy::default(),
+            tram_addr:               Loopy::default(),
+            fine_x:                  0x00,
+            address_latch:           0x00, 
+            ppu_data_buffer:         0x00, 
+            nmi:                     false, 
+            bg_shifter_pattern_hi:   0x0000,
+            bg_shifter_pattern_lo:   0x0000,
+            bg_shifter_attrib_hi:    0x0000,
+            bg_shifter_attrib_lo:    0x0000,
+            bg_next_tile_lsb:        0x00,
+            bg_next_tile_msb:        0x00,
+            bg_next_tile_id:         0x00,
+            bg_next_tile_attrib:     0x00,
+            oam:                     OAM::default(),
+            oam_addr:                0x00,
+            sprite_scanline:         SpriteScanline::default(),
+            sprite_count:            0x00,
+            sp_shifter_pattern_hi:  [0x0000; 8],
+            sp_shifter_pattern_lo:  [0x0000; 8],
+            b_sp_0_being_rendered:   false,
+            b_sp_0_hit_possible:     false,
         }
     }
 
@@ -238,6 +262,7 @@ impl Olc2c02 {
         }
     }
 
+    // Transfer temporarily stored horizontal nametable access information into the main pointer
     fn transfer_address_x(&mut self) {
         if (self.mask & Olc2c02::MASK_RENDER_BACKGROUND != 0) || (self.mask & Olc2c02::MASK_RENDER_SPRITES != 0) {
             self.vram_addr.nametable_x = self.tram_addr.nametable_x;
@@ -245,6 +270,7 @@ impl Olc2c02 {
         }
     }
 
+    // Transfer temporarily stored vertical nametable access information into the main pointer
     fn transfer_address_y(&mut self) {
         if (self.mask & Olc2c02::MASK_RENDER_BACKGROUND != 0) || (self.mask & Olc2c02::MASK_RENDER_SPRITES != 0) {
             self.vram_addr.nametable_y = self.tram_addr.nametable_y;
@@ -253,6 +279,7 @@ impl Olc2c02 {
         }
     }
 
+    // Prepare the background tile shifters for outputting next 8 pixels in scanline
     fn load_background_shifters(&mut self) {
 		self.bg_shifter_pattern_lo = (self.bg_shifter_pattern_lo & 0xFF00) | self.bg_next_tile_lsb as u16;
 		self.bg_shifter_pattern_hi = (self.bg_shifter_pattern_hi & 0xFF00) | self.bg_next_tile_msb as u16;
@@ -261,12 +288,28 @@ impl Olc2c02 {
     }
 
     
+    // Every caycle the shifters shift their contents by 1 bit because the output progresses by 1 pixel
     fn update_shifters(&mut self) {
         if self.mask & Olc2c02::MASK_RENDER_BACKGROUND != 0 {
             self.bg_shifter_pattern_lo <<= 1;
             self.bg_shifter_pattern_hi <<= 1;
             self.bg_shifter_attrib_lo  <<= 1;
             self.bg_shifter_attrib_hi  <<= 1;
+        }
+
+        // We want to detect when the scanline collides with the sprite
+        // To do so, we decrement the sprite's x position every cycle 
+        // One x = 0, we know that the scanline has reached it and that it should be rendered
+        if (self.mask & Olc2c02::MASK_RENDER_SPRITES != 0) && self.cycle >= 1 && self.cycle < 258 {
+            for i in 0u8..self.sprite_count {
+                let sprite = &mut self.sprite_scanline.sprites[i as usize]; 
+                if sprite.x > 0 {
+                    sprite.x -= 1; 
+                } else {
+                    self.sp_shifter_pattern_lo[i as usize] <<= 1;
+                    self.sp_shifter_pattern_hi[i as usize] <<= 1;
+                }
+            }
         }
     }
 
@@ -281,8 +324,7 @@ impl Olc2c02 {
 
         let render_scanline = self.scanline < 240 || self.scanline == 261;
 
-        if  render_scanline
-            && ((self.cycle >= 2 && self.cycle < 258) || (self.cycle >= 321 && self.cycle < 338)) {
+        if  render_scanline && ((self.cycle >= 2 && self.cycle < 258) || (self.cycle >= 321 && self.cycle < 338)) {
 
             self.update_shifters();
 
@@ -295,20 +337,13 @@ impl Olc2c02 {
                     self.bg_next_tile_id = self.read_ppu(addr, cartridge).unwrap_or(0);
                 },
                 2 => {
-                    let addr = (
-                        0x23C0                                        | 
-                        ((self.vram_addr.nametable_y as u16) << 11)   | 
-                        ((self.vram_addr.nametable_x as u16) << 10)   | 
-                        ((self.vram_addr.coarse_y as u16) >> 2) << 3) | 
-                        ((self.vram_addr.coarse_x as u16) >> 2
-                    );                        
+                    let addr = (0x23C0 |  ((self.vram_addr.nametable_y as u16) << 11)   
+                                            |  ((self.vram_addr.nametable_x as u16) << 10)   
+                                            | (((self.vram_addr.coarse_y    as u16) >> 2) << 3))
+                                            |  ((self.vram_addr.coarse_x    as u16) >> 2);                        
                     self.bg_next_tile_attrib = self.read_ppu(addr, cartridge).unwrap_or(0);
-                    if self.vram_addr.coarse_y & 0x02 != 0 {
-                        self.bg_next_tile_attrib >>= 4;
-                    } 
-                    if self.vram_addr.coarse_x & 0x02 != 0 {
-                        self.bg_next_tile_attrib >>= 2;
-                    } 
+                    if self.vram_addr.coarse_y & 0x02 != 0 {self.bg_next_tile_attrib >>= 4;} 
+                    if self.vram_addr.coarse_x & 0x02 != 0 {self.bg_next_tile_attrib >>= 2;} 
                     self.bg_next_tile_attrib &= 0x03;
                 }
                 4 => {
@@ -354,6 +389,157 @@ impl Olc2c02 {
             self.bg_next_tile_id = self.read_ppu(addr, cartridge).unwrap_or(0);
         }
 
+        //////////////////////////
+        // Foreground rendering 
+        //////////////////////////
+        if render_scanline && (self.cycle == 257 && self.scanline < 240) {
+            // Clear sprite scanline array
+            for addr in 0u8..32 {
+                self.sprite_scanline.write(addr, 0xFF);
+            }
+
+            self.sprite_count = 0; 
+
+            
+			for i in 0..8 {
+				self.sp_shifter_pattern_lo[i] = 0;
+				self.sp_shifter_pattern_hi[i] = 0;
+			}
+
+            self.status &= !Olc2c02::STATUS_SPRITE_OVERFLOW;
+
+            let sprite_size: i16 = if (self.control & Olc2c02::CTRL_SPRITE_SIZE) != 0 {16} else {8};
+
+            self.b_sp_0_hit_possible = false; 
+
+            for n_oam_entry in 0u8..64 {
+                let oam_sprite = self.oam.sprites[n_oam_entry as usize];
+                let diff = self.scanline as i16 - oam_sprite.y as i16;
+
+                if diff >= 0 && diff < sprite_size {
+                    // If we don't already have 8 sprites, we copy the sprite information from the OAM into the sprite scanline array
+                    if self.sprite_count < 8 {
+                        // Is this sprite sprite zero? 
+                        if n_oam_entry == 0 {
+                            self.b_sp_0_hit_possible = true;
+                        }
+                        self.sprite_scanline.sprites[self.sprite_count as usize] = self.oam.sprites[n_oam_entry as usize];
+                        self.sprite_count += 1;
+                    } else {
+                        self.status |=  Olc2c02::STATUS_SPRITE_OVERFLOW;
+                        break;
+                        
+                    }
+                }
+            }
+        }
+
+        if render_scanline && self.cycle == 340 {
+            for i in 0u8..self.sprite_count {
+
+                let mut sprite_pattern_bits_lo: u8  = 0x00;
+                let mut sprite_pattern_bits_hi: u8  = 0x00;
+                let mut sprite_pattern_addr_lo: u16 = 0x0000;
+                let mut sprite_pattern_addr_hi: u16 = 0x0000;
+
+                let sprite = self.sprite_scanline.sprites[i as usize];
+
+
+                // 8x8 sprite mode
+                if (self.control & Olc2c02::CTRL_SPRITE_SIZE) == 0 {
+                    // These 3 indices index into a 2D memory structure
+                    // This is either 0k or 4k offset on the CPU bus
+                    let offset1 = (((self.control & Olc2c02::CTRL_PATTERN_SPRITE) != 0) as u16) << 12; 
+                    // << 4 = * 16 = each tile is 16 bytes in size 
+                    let offset2 = (sprite.id as u16) << 4;        
+                    // Which row of the tile are we currently in - Unsigned here because it should always be positive                                      
+                    let offset3 = self.scanline - (sprite.y as u16);                                    
+
+                    // Sprite is not flipped vertically, i.e. normal
+                    if sprite.attribute & 0x80 == 0 {
+                        sprite_pattern_addr_lo = offset1 | offset2 | offset3; 
+
+                    } 
+                    // Sprite is flipped vertically
+                    // Sprite is not flipped vertically, i.e. normal
+                    else 
+                    {
+                        sprite_pattern_addr_lo = offset1 | offset2 | (7 - offset3); 
+                    }
+                } 
+                // 8x16 sprite mode
+                else 
+                {
+                    
+                    // Sprite is not flipped vertically, i.e. normal
+                    if sprite.attribute & 0x80 == 0 {
+
+                        // Read top half tile
+                        if self.scanline - (sprite.y as u16) < 8 {
+                            
+                            let offset1 =  ((sprite.id & 0x01) as u16)      << 12; 
+                            let offset2 = (((sprite.id & 0xFE) as u16) + 0) <<  4;                                            
+                            let offset3 = (self.scanline - (sprite.y as u16)) & 0x0007;   
+
+                            sprite_pattern_addr_lo = offset1 | offset2 | offset3; 
+                        } 
+                        // Read bottom half tile
+                        else 
+                        {
+                            let offset1 =  ((sprite.id & 0x01) as u16)      << 12; 
+                            let offset2 = (((sprite.id & 0xFE) as u16) + 1) <<  4;                                            
+                            let offset3 = (self.scanline - (sprite.y as u16)) & 0x0007;   
+
+                            sprite_pattern_addr_lo = offset1 | offset2 | offset3; 
+
+                        }
+
+                    } 
+                    // Sprite is flipped vertically
+                    // Sprite is not flipped vertically, i.e. normal
+                    else 
+                    {
+                        
+                        // Read top half tile
+                        if self.scanline - (sprite.y as u16) < 8 {
+                            
+                            let offset1 =  ((sprite.id & 0x01) as u16)      << 12; 
+                            let offset2 = (((sprite.id & 0xFE) as u16) + 1) <<  4;                                            
+                            let offset3 = 7 - ((self.scanline - (sprite.y as u16)) & 0x0007);   
+
+                            sprite_pattern_addr_lo = offset1 | offset2 | offset3; 
+                        } 
+                        // Read bottom half tile
+                        else 
+                        {
+                            let offset1 =  ((sprite.id & 0x01) as u16)      << 12; 
+                            let offset2 = (((sprite.id & 0xFE) as u16) + 0) <<  4;                                            
+                            let offset3 = 7  - ((self.scanline - (sprite.y as u16)) & 0x0007);   
+
+                            sprite_pattern_addr_lo = offset1 | offset2 | offset3; 
+
+                        }
+                    }
+                    
+                } // End of if for setting sprite_pattern_addr_lo
+
+                sprite_pattern_addr_hi = sprite_pattern_addr_lo + 8; 
+
+                sprite_pattern_bits_lo = self.read_ppu(sprite_pattern_addr_lo, cartridge).unwrap_or(0);
+                sprite_pattern_bits_hi = self.read_ppu(sprite_pattern_addr_hi, cartridge).unwrap_or(0);
+
+                // if the sprite is flipped horizontally, we need to flip the pattern bytes
+
+                if sprite.attribute & 0x40 != 0 {
+                    sprite_pattern_bits_lo = sprite_pattern_bits_lo.reverse_bits();
+                    sprite_pattern_bits_hi = sprite_pattern_bits_hi.reverse_bits();
+                }
+
+                
+				self.sp_shifter_pattern_lo[i as usize] = sprite_pattern_bits_lo;
+				self.sp_shifter_pattern_hi[i as usize] = sprite_pattern_bits_hi;
+            } // End of the loop over the active sprites
+        } // End of cycle 340
         
 
         if self.scanline == 241 && self.cycle == 1 {
@@ -361,6 +547,7 @@ impl Olc2c02 {
             if self.control & Olc2c02::CTRL_ENABLE_NMI != 0 {
                 self.nmi = true;
             }
+
         }
 
         if self.scanline == 261 && self.cycle >= 280 && self.cycle < 305 {
@@ -368,13 +555,24 @@ impl Olc2c02 {
         }
         
 
+        // Effectively start of new frame
         if self.scanline == 261 && self.cycle == 1 {
             self.status &= !Olc2c02::STATUS_VERTICAL_BLANK;
+            self.status &= !Olc2c02::STATUS_SPRITE_OVERFLOW;
+            self.status &= !Olc2c02::STATUS_SPRITE_ZERO_HIT;
+
+            for i in 0u8..8 {
+                self.sp_shifter_pattern_hi[i as usize] = 0;
+                self.sp_shifter_pattern_lo[i as usize] = 0;
+            }
         }
 
-        let mut bg_pixel: u8   = 0x00; 
+        // Compose foreground and background information 
+
+        // Background 
+        let mut bg_pixel:   u8 = 0x00; 
         let mut bg_palette: u8 = 0x00;
-        let mut colour: u8     = 0x00;
+
 
         if self.mask & Olc2c02::MASK_RENDER_BACKGROUND != 0 {
             let bit_mux: u16 = 0x8000 >> self.fine_x;
@@ -393,15 +591,86 @@ impl Olc2c02 {
             let bg_pal1  = ((self.bg_shifter_attrib_hi & bit_mux) > 0) as u8;
             bg_palette       = (bg_pal1 << 1) | bg_pal0;
 
-            colour           = self.get_colour_from_palette_ram(bg_palette, bg_pixel, cartridge).unwrap_or(0);
-
-        } else {
-            self.noise_state ^= self.noise_state << 13;
-            self.noise_state ^= self.noise_state >> 17;
-            self.noise_state ^= self.noise_state << 5;
-
-            colour            = (self.noise_state & 0xFF) as u8;
         }
+        
+
+        // Foreground 
+        let mut fg_pixel:    u8 = 0x00;
+        let mut fg_palette:  u8 = 0x00;
+        let mut fg_priority: bool = false;
+
+        if self.mask & Olc2c02::MASK_RENDER_SPRITES != 0  {
+            self.b_sp_0_being_rendered = false; 
+
+            for i in 0u8..self.sprite_count {
+                let sprite = self.sprite_scanline.sprites[i as usize];
+
+                // Scanline has collided with the sprite
+                if sprite.x == 0 {
+
+                    let fg_pixel_lo: u8 = ((self.sp_shifter_pattern_lo[i as usize] & 0x80) > 0) as u8;
+                    let fg_pixel_hi: u8 = ((self.sp_shifter_pattern_hi[i as usize] & 0x80) > 0) as u8;
+                    fg_pixel = (fg_pixel_hi << 1) | fg_pixel_lo;
+
+                    
+                    fg_palette  = (sprite.attribute & 0x03) + 0x04;
+                    fg_priority = (sprite.attribute & 0x20) == 0;
+
+                    if fg_pixel != 0 {
+                        if i == 0 {
+                            self.b_sp_0_being_rendered = true; 
+                        }
+
+                        break;
+                    }
+                }
+            } // Loop over sprites that we break out of
+        } // Check whether sprites should be rendered
+
+
+        // Combine background and foreground pixel
+        let mut pixel: u8 = 0x00; 
+        let mut palette: u8 = 0x00; 
+
+        if bg_pixel == 0 && fg_pixel == 0 {
+            pixel   = 0x00; 
+            palette = 0x00; 
+        } else if bg_pixel == 0 && fg_pixel > 0 {
+            pixel   = fg_pixel; 
+            palette = fg_palette
+        } else if bg_pixel > 0 && fg_pixel == 0 {
+            pixel   = bg_pixel; 
+            palette = bg_palette; 
+        } else if bg_pixel > 0 && fg_pixel > 0 {
+            if fg_priority {
+                pixel   = fg_pixel; 
+                palette = fg_palette; 
+            } else {
+                pixel   = bg_pixel; 
+                palette = bg_palette; 
+            }
+
+            if self.b_sp_0_being_rendered && self.b_sp_0_hit_possible {
+                if ((self.mask & Olc2c02::MASK_RENDER_BACKGROUND) != 0) && ((self.mask & Olc2c02::MASK_RENDER_SPRITES) != 0) {
+                    let left_edge_enabled =
+                        (self.mask & Olc2c02::MASK_RENDER_BACKGROUND_LEFT) != 0 &&
+                        (self.mask & Olc2c02::MASK_RENDER_SPRITES_LEFT) != 0;
+
+                    if !left_edge_enabled {
+                        if self.cycle >= 9 && self.cycle < 258 {
+                            self.status |= Olc2c02::STATUS_SPRITE_ZERO_HIT;
+                        }
+                    } else {
+                        if self.cycle >= 1 && self.cycle < 258 {
+                            self.status |= Olc2c02::STATUS_SPRITE_ZERO_HIT;
+                        }
+                    }
+                }
+            }
+        }
+
+
+        let colour = self.get_colour_from_palette_ram(palette, pixel, cartridge).unwrap_or(0);
 
         if self.scanline < 240 && self.cycle >= 1 && self.cycle <= 256 {
             self.set_pixel((self.cycle - 1) as usize, self.scanline as usize, colour);
@@ -460,6 +729,10 @@ impl Olc2c02 {
         self.bg_next_tile_attrib    = 0x00;
         self.oam                    = OAM::default();
         self.oam_addr               = 0x00;
+        self.sprite_scanline        = SpriteScanline::default();
+        self.sprite_count           = 0x00;
+        self.sp_shifter_pattern_hi  = [0x00; 8];
+        self.sp_shifter_pattern_lo  = [0x00; 8];
     }
 }
 

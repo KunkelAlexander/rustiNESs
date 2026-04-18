@@ -6,6 +6,55 @@ This project aims to incrementally emulate the original NES hardware, starting w
 
 ## Devlog
 
+## Day 11: 18.04.2025
+
+- Sprites get stored in their own internal memory of the PPU - the Object Attribute Memory (OAM)
+- OAM is 256 bytes of storage exclusive to the internals of the PPU
+- OAM can stores 64 sprites - Mario in SMB is composed of several 8x8 tiles - each is considered a sprite with a unique ID
+- The CPU must keep track of all of the tile id's making up the larger sprite and move them around
+- PPU supports 8x8 and 8x16 sprites - they are rendered similarly
+
+![](figures/29.png)
+
+- CPU can communicate with the PPU via 8 registers - is what we said so far
+- 2 are for the PPU - OAM ADDR and OAM DATA
+- CPU can populate the address and then write the data to it
+- To fully populate the PPU, the CPU would need to write 256 addresses and then write data 256 times
+- BUT: This is way too slow
+- Instead, the CPU talks to the PPU via a secret 9th register that can only be written to 
+- Writing to this secret register starts sorcery called Direct Memory Address (DMA)
+- Upon writing to the DMA register, the CPU is suspended - the clock is switched off, and for the subsequent 512 clock cycles bytes are written from the CPU memory and written to the PPU
+- DMA writes a page from the CPU memory to the PPU memory in one go - this is four times faster than manually transferring data. 
+- I implemented the DMA and can confirm that the output for the Donkey Kong menu cursor sprite is the same as in the video :) 
+
+```
+0: (56, 127) ID: A2 AT: 00
+1: (0, 255) ID: 00 AT: 00
+2: (0, 255) ID: 00 AT: 00
+3: (0, 255) ID: 00 AT: 00
+4: (0, 255) ID: 00 AT: 00
+5: (0, 255) ID: 00 AT: 00
+6: (0, 255) ID: 00 AT: 00
+7: (0, 255) ID: 00 AT: 00
+8: (0, 255) ID: 00 AT: 00
+9: (0, 255) ID: 00 AT: 00
+```
+
+- Once the OAM has sprite information, we need to detect which sprites are visible
+- At the end of a scanline, we determine which sprites are visible for the next scanline
+- Compare y-coordinate of the sprite with the y-coordinate of the scanline, that sprite is a candidate
+- There is a situation called sprite overflow: If there are more than 8 sprites per scanline, the NES sets a sprite overflow flag 
+- The process can be described as follows
+    1. End of scanline, search OAM for max of 8 sprites visible on next scanline
+    2. As scanline scans, reduce sprites x coord
+    3. If x = 0, start to draw sprites
+    4. Resolve priority of sprite pixel 
+- Orientation: We can instruct the PPU to draw the sprite inverted in both axes. This means that we don't need two sprites for Mario running left and right 
+- Horizontal flipping: invert bits from 00000111 to 11100000
+- Vertical flipping: We need to actually read elsewhere - this is easier for 8x8 than for 8x16 tiles
+
+
+
 ## Day 11: 14.04.2025
 
 

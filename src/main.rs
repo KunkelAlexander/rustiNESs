@@ -128,6 +128,7 @@ fn main() -> std::io::Result<()> {
 
     // load ROM
     emu.insert_cartridge(&bytes).expect("failed to load ROM");
+    emu.reset();
 
     
     println!("Loaded ROM");
@@ -137,9 +138,23 @@ fn main() -> std::io::Result<()> {
     output_name_table(&emu, "output/name_table_before.txt")?;
     output_frame(&emu, "output/frame_before.png");
 
-    // run some cycles
-    for _ in 0..10000000 {
-        emu.clock();
+    for frame in 0..100 {
+        emu.run_frame();
+    }
+    for frame in 0..10 {
+        emu.run_frame();
+//
+        println!("Frame {}", frame);
+        for i in 0u8..10 {
+            println!(
+                "{}: ({}, {}) ID: {:02X} AT: {:02X}",
+                i,
+                emu.bus.ppu.oam.read(i * 4 + 3),
+                emu.bus.ppu.oam.read(i * 4 + 0),
+                emu.bus.ppu.oam.read(i * 4 + 1),
+                emu.bus.ppu.oam.read(i * 4 + 2),
+            );
+        }
     }
     
     // Dump after running
