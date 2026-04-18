@@ -2,7 +2,9 @@
 
 A simple Nintendo Entertainment System (NES) emulator written in **Rust**, built for learning and experimentation.
 
-This project aims to incrementally emulate the original NES hardware, starting with the **6502 CPU** and gradually adding the PPU, APU, cartridge mappers, and input devices.
+This project aims to incrementally emulate the original NES hardware, currently including the **6502 CPU**, the PPU, one cartridge mapper and controller input. 
+The emulator currently works for a limited number of games including Donkey Kong and Super Mario Bros and is available online here: https://github.com/KunkelAlexander/rustiNESs. 
+
 
 ![](figures/2.gif)
 
