@@ -282,13 +282,10 @@ function setButtonState(name, pressed) {
 
 function keyToButton(code) {
   switch (code) {
-    case "KeyX": return "x";            // NES A
-    case "KeyZ": return "z";            // NES B
-    case "Enter": return "s";           // Start
-    case "ShiftRight":
-    case "Backspace": return "a";       // Select
-    case "KeyA": return "a";            // keep old mapping too
-    case "KeyS": return "s";            // keep old mapping too
+    case "KeyA": return "x";            // NES A
+    case "KeyF": return "z";            // NES B
+    case "KeyS": return "s";            // Start
+    case "KeyD": return "a";            // Select
     case "ArrowUp": return "up";
     case "ArrowDown": return "down";
     case "ArrowLeft": return "left";
@@ -312,7 +309,14 @@ window.addEventListener("blur", releaseAllButtons);
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) releaseAllButtons();
 });
+
 document.addEventListener("fullscreenchange", () => {
+  updateFullscreenUI();
+  if (!isFullscreen()) releaseAllButtons();
+});
+
+document.addEventListener("webkitfullscreenchange", () => {
+  updateFullscreenUI();
   if (!isFullscreen()) releaseAllButtons();
 });
 
@@ -417,28 +421,62 @@ function isFullscreen() {
   return document.fullscreenElement || document.webkitFullscreenElement;
 }
 
-async function toggleFullscreen() {
+function focusGameSurface() {
+  $("screen")?.focus();
+}
+
+function isMobileLike() {
+  return window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+}
+
+function updateFullscreenUI() {
+  const shell = $("playShell");
+  if (!shell) return;
+
+  const active = !!(document.fullscreenElement === shell || document.webkitFullscreenElement === shell);
+  shell.classList.toggle("is-fullscreen", active);
+  shell.classList.toggle("is-mobile-fs", active && isMobileLike());
+  shell.classList.toggle("is-desktop-fs", active && !isMobileLike());
+}
+
+async function enterFullscreen() {
   const shell = $("playShell");
   if (!shell) return;
 
   try {
-    if (!isFullscreen()) {
-      if (shell.requestFullscreen) {
-        await shell.requestFullscreen();
-      } else if (shell.webkitRequestFullscreen) {
-        await shell.webkitRequestFullscreen();
-      }
+    if (shell.requestFullscreen) {
+      await shell.requestFullscreen({ navigationUI: "hide" });
+    } else if (shell.webkitRequestFullscreen) {
+      await shell.webkitRequestFullscreen();
     } else {
-      if (document.exitFullscreen) {
-        await document.exitFullscreen();
-      } else if (document.webkitExitFullscreen) {
-        await document.webkitExitFullscreen();
-      }
+      log("Fullscreen is not supported on this device/browser.");
+      return;
     }
 
+    updateFullscreenUI();
     focusGameSurface();
   } catch (e) {
     log(`Fullscreen failed: ${e.message || e}`);
+  }
+}
+
+async function exitFullscreen() {
+  try {
+    if (document.exitFullscreen) {
+      await document.exitFullscreen();
+    } else if (document.webkitExitFullscreen) {
+      await document.webkitExitFullscreen();
+    }
+  } catch (e) {
+    log(`Exit fullscreen failed: ${e.message || e}`);
+  }
+}
+
+async function toggleFullscreen() {
+  if (!isFullscreen()) {
+    await enterFullscreen();
+  } else {
+    await exitFullscreen();
   }
 }
 
@@ -490,6 +528,7 @@ function bindUI() {
   });
 
   $("btnFullscreen")?.addEventListener("click", toggleFullscreen);
+  $("btnExitFullscreen")?.addEventListener("click", exitFullscreen);
 
   $("romLoader").addEventListener("change", async (e) => {
     const file = e.target.files[0];
@@ -635,6 +674,7 @@ async function boot() {
     setStatus(false, "Failed to load WASM");
     log(`Failed to init wasm: ${e}`);
   }
+
 }
 
 boot();

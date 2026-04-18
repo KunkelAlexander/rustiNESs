@@ -584,115 +584,253 @@ body[data-mode="cpu"] .mode-cpu { display: block; }
   touch-action: none;
 }
 
-/* Fullscreen play mode */
-.play-shell:fullscreen,
-.play-shell:-webkit-full-screen {
-  background: #111;
-  color: white;
-  width: 100vw;
-  height: 100vh;
-  padding: max(12px, env(safe-area-inset-top))
-           max(12px, env(safe-area-inset-right))
-           max(12px, env(safe-area-inset-bottom))
-           max(12px, env(safe-area-inset-left));
-  box-sizing: border-box;
-  display: grid;
-  grid-template-rows: auto 1fr auto;
-  align-items: center;
-  justify-items: center;
-  gap: 10px;
+/* =========================================================
+   True fullscreen play mode
+========================================================= */
+
+.fs-exit {
+  display: none;
 }
 
-.play-shell:fullscreen .tv,
-.play-shell:-webkit-full-screen .tv {
-  width: min(100%, 110vh);
-  max-width: none;
+.play-shell.is-fullscreen .play-topbar {
+  display: none;
+}
+
+.play-shell.is-fullscreen .rotate-hint {
+  display: none;
+}
+
+.play-shell.is-fullscreen .tv {
   background: transparent;
   border: none;
   box-shadow: none;
   padding: 0;
+  border-radius: 0;
 }
 
-.play-shell:fullscreen #screen,
-.play-shell:-webkit-full-screen #screen {
-  width: min(100vw, calc(100vh * 256 / 240));
-  max-height: 60vh;
-  height: auto;
-  border-radius: 10px;
-  box-shadow: none;
-}
-
-.play-shell:fullscreen .power-led,
-.play-shell:-webkit-full-screen .power-led {
+.play-shell.is-fullscreen .power-led {
   display: none;
 }
 
-.play-shell:fullscreen .controller,
-.play-shell:-webkit-full-screen .controller {
-  width: 100%;
-  max-width: 980px;
+/* Base fullscreen container */
+.play-shell:fullscreen,
+.play-shell:-webkit-full-screen,
+.play-shell.is-fullscreen {
+  background: #000;
+  color: white;
 }
 
-/* Mobile fullscreen: landscape-first layout */
-@media (orientation: landscape) and (max-width: 900px) {
-  .play-shell:fullscreen,
-  .play-shell:-webkit-full-screen {
-    grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
-    grid-template-rows: auto 1fr;
-    grid-template-areas:
-      "top top"
-      "screen controls";
+/* ========================
+   Desktop fullscreen
+   canvas only
+======================== */
+
+.play-shell.is-desktop-fs:fullscreen,
+.play-shell.is-desktop-fs:-webkit-full-screen,
+.play-shell.is-desktop-fs {
+  width: 100vw;
+  height: 100vh;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.play-shell.is-desktop-fs .tv {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.play-shell.is-desktop-fs #screen {
+  width: min(100vw, calc(100vh * 256 / 240));
+  height: auto;
+  max-width: 100vw;
+  max-height: 100vh;
+  aspect-ratio: 256 / 240;
+  display: block;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.play-shell.is-desktop-fs .controller,
+.play-shell.is-desktop-fs .fs-exit {
+  display: none !important;
+}
+
+/* ========================
+   Mobile fullscreen
+   controls on sides
+======================== */
+
+.play-shell.is-mobile-fs:fullscreen,
+.play-shell.is-mobile-fs:-webkit-full-screen,
+.play-shell.is-mobile-fs {
+  width: 100vw;
+  height: 100vh;
+  padding:
+    max(8px, env(safe-area-inset-top))
+    max(8px, env(safe-area-inset-right))
+    max(8px, env(safe-area-inset-bottom))
+    max(8px, env(safe-area-inset-left));
+  box-sizing: border-box;
+  overflow: hidden;
+  position: relative;
+}
+
+/* landscape mobile layout */
+@media (orientation: landscape) {
+  .play-shell.is-mobile-fs {
+    display: grid;
+    grid-template-columns: 132px 1fr 132px;
+    grid-template-rows: 1fr;
     align-items: center;
+    justify-items: center;
+    gap: 8px;
   }
 
-  .play-shell:fullscreen .play-topbar,
-  .play-shell:-webkit-full-screen .play-topbar {
-    grid-area: top;
+  .play-shell.is-mobile-fs .tv {
+    grid-column: 2;
     width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
-  .play-shell:fullscreen .tv,
-  .play-shell:-webkit-full-screen .tv {
-    grid-area: screen;
-    width: 100%;
+  .play-shell.is-mobile-fs #screen {
+    width: min(100%, calc(100vh * 256 / 240));
+    max-width: 100%;
+    max-height: 100vh;
+    height: auto;
+    aspect-ratio: 256 / 240;
+    border-radius: 0;
+    box-shadow: none;
   }
 
-  .play-shell:fullscreen .controller,
-  .play-shell:-webkit-full-screen .controller {
-    grid-area: controls;
+  .play-shell.is-mobile-fs .controller {
+    display: contents;
+  }
+
+  .play-shell.is-mobile-fs .dpad {
+    grid-column: 1;
+    align-self: center;
+    justify-self: center;
+  }
+
+  .play-shell.is-mobile-fs .ab-buttons {
+    grid-column: 3;
+    align-self: center;
+    justify-self: center;
+    display: grid;
     grid-template-columns: 1fr;
-    gap: 16px;
+    gap: 18px;
   }
 
-  .play-shell:fullscreen #screen,
-  .play-shell:-webkit-full-screen #screen {
-    width: 100%;
-    max-height: 85vh;
-  }
-}
-
-/* Portrait fallback */
-@media (orientation: portrait) and (max-width: 900px) {
-  .play-shell:fullscreen .rotate-hint,
-  .play-shell:-webkit-full-screen .rotate-hint {
-    display: block;
-  }
-
-  .play-shell:fullscreen #screen,
-  .play-shell:-webkit-full-screen #screen {
-    max-height: 40vh;
-  }
-
-  .play-shell:fullscreen .controller,
-  .play-shell:-webkit-full-screen .controller {
-    grid-template-columns: 1fr 1fr;
+  .play-shell.is-mobile-fs .center-buttons {
+    position: absolute;
+    left: 50%;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    transform: translateX(-50%);
+    display: grid;
+    grid-auto-flow: column;
     gap: 12px;
   }
 
-  .play-shell:fullscreen .center-buttons,
-  .play-shell:-webkit-full-screen .center-buttons {
+  .play-shell.is-mobile-fs .pad-btn {
+    width: 78px;
+    height: 78px;
+  }
+
+  .play-shell.is-mobile-fs .pad-btn.action {
+    width: 88px;
+    height: 88px;
+  }
+
+  .play-shell.is-mobile-fs .pad-btn.small {
+    width: 92px;
+    height: 42px;
+  }
+
+  .play-shell.is-mobile-fs .dpad-mid {
+    grid-template-columns: 78px 30px 78px;
+  }
+
+  .play-shell.is-mobile-fs .fs-exit {
+    display: inline-flex;
+    position: absolute;
+    top: max(10px, env(safe-area-inset-top));
+    right: max(10px, env(safe-area-inset-right));
+    z-index: 20;
+    border: none;
+    background: rgba(255,255,255,0.14);
+    color: white;
+    backdrop-filter: blur(10px);
+  }
+}
+
+/* portrait mobile fallback */
+@media (orientation: portrait) {
+  .play-shell.is-mobile-fs {
+    display: grid;
+    grid-template-rows: auto 1fr auto auto;
+    align-items: center;
+    justify-items: center;
+    gap: 10px;
+  }
+
+  .play-shell.is-mobile-fs .fs-exit {
+    display: inline-flex;
+    position: absolute;
+    top: max(10px, env(safe-area-inset-top));
+    right: max(10px, env(safe-area-inset-right));
+    z-index: 20;
+    border: none;
+    background: rgba(255,255,255,0.14);
+    color: white;
+    backdrop-filter: blur(10px);
+  }
+
+  .play-shell.is-mobile-fs .rotate-hint {
+    display: block;
+    color: rgba(255,255,255,0.7);
+    font-size: 13px;
+    text-align: center;
+    padding-top: 42px;
+  }
+
+  .play-shell.is-mobile-fs .tv {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .play-shell.is-mobile-fs #screen {
+    width: 100%;
+    max-height: 42vh;
+    height: auto;
+    aspect-ratio: 256 / 240;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .play-shell.is-mobile-fs .controller {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    align-items: center;
+  }
+
+  .play-shell.is-mobile-fs .center-buttons {
     grid-column: 1 / -1;
+    display: grid;
     grid-auto-flow: column;
     justify-content: center;
+    gap: 10px;
   }
 }
