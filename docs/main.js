@@ -512,8 +512,10 @@ function bindUI() {
   // Touch buttons — wire all [data-btn] elements
   document.querySelectorAll("[data-btn]").forEach(wireTouchButton);
 
-  // Global pointer-up safety net
-  window.addEventListener("pointerup", releaseAllButtons);
+  // Note: no global pointerup → releaseAllButtons here.
+  // Each touch button handles its own release via pointerup/pointercancel/
+  // lostpointercapture on the element itself, so held keyboard keys are
+  // never accidentally cleared when a touch button is lifted.
 }
 
 // ═══════════════════════════════════════════════════════
