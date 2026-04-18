@@ -63,6 +63,7 @@ The emulator currently works for a limited number of games including Donkey Kong
   <img src="figures/1.gif" alt="Demo">
 </p>
 
+- I tried to improve the UI, but the LLM code is just abysmal - I will redo the UI from scratch I guess 
 
 ## Day 11: 14.04.2025
 
