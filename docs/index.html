@@ -51,21 +51,10 @@
       <!-- Landscape content -->
       <div class="fs-landscape" id="fsLandscape">
 
-        <!-- Left: D-pad -->
-        <div class="fs-ctrl-left" aria-label="D-pad">
-          <div class="dpad-cross">
-            <div class="dpad-row">
-              <button class="dpad-face up"   data-btn="up"    aria-label="Up">▲</button>
-            </div>
-            <div class="dpad-row dpad-middle">
-              <button class="dpad-face left"  data-btn="left"  aria-label="Left">◀</button>
-              <div class="dpad-center"></div>
-              <button class="dpad-face right" data-btn="right" aria-label="Right">▶</button>
-            </div>
-            <div class="dpad-row">
-              <button class="dpad-face down"  data-btn="down"  aria-label="Down">▼</button>
-            </div>
-          </div>
+        <!-- Left: Virtual joystick -->
+        <div class="fs-ctrl-left" aria-label="Joystick">
+          <canvas id="joystick" class="joystick-canvas" width="140" height="140"
+                  aria-label="Virtual joystick — drag to move"></canvas>
         </div>
 
         <!-- Center: screen only -->

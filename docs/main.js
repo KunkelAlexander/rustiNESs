@@ -512,10 +512,222 @@ function bindUI() {
   // Touch buttons — wire all [data-btn] elements
   document.querySelectorAll("[data-btn]").forEach(wireTouchButton);
 
+  // Touch buttons — wire all [data-btn] elements
+  document.querySelectorAll("[data-btn]").forEach(wireTouchButton);
+
   // Note: no global pointerup → releaseAllButtons here.
   // Each touch button handles its own release via pointerup/pointercancel/
   // lostpointercapture on the element itself, so held keyboard keys are
   // never accidentally cleared when a touch button is lifted.
+
+  // Virtual joystick
+  initJoystick();
+}
+
+// ═══════════════════════════════════════════════════════
+//  Virtual joystick
+// ═══════════════════════════════════════════════════════
+
+function initJoystick() {
+  const canvas = document.getElementById("joystick");
+  if (!canvas) return;
+
+  // Resize canvas backing store to match CSS size (handles hi-DPI too)
+  function resizeJoystick() {
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+    const dpr  = window.devicePixelRatio || 1;
+    canvas.width  = rect.width  * dpr;
+    canvas.height = rect.height * dpr;
+    drawJoystick();
+  }
+
+  const ctx2d = canvas.getContext("2d");
+
+  // Joystick state
+  let active    = false;  // finger is down
+  let thumbX    = 0;      // offset from centre, normalised -1..1
+  let thumbY    = 0;
+  let lastDir   = null;   // last 8-way direction string we applied
+
+  // 8-direction snap: returns one of "N","NE","E","SE","S","SW","W","NW" or null
+  function snapDir(nx, ny) {
+    const DEADZONE = 0.25;
+    if (Math.sqrt(nx*nx + ny*ny) < DEADZONE) return null;
+
+    // atan2: 0 = east, positive = clockwise (screen coords: y down)
+    let angle = Math.atan2(ny, nx) * 180 / Math.PI; // -180..180
+    if (angle < 0) angle += 360;                     // 0..360, 0=E, 90=S
+
+    // Rotate so 0 = North, divide into 8 × 45° sectors
+    const adjusted = (angle + 90) % 360;             // 0=N, 90=E, 180=S, 270=W
+    const sector   = Math.round(adjusted / 45) % 8;  // 0..7
+    const DIRS     = ["N","NE","E","SE","S","SW","W","NW"];
+    return DIRS[sector];
+  }
+
+  // Map direction string → { up, down, left, right }
+  function dirToButtons(dir) {
+    return {
+      up:    (dir === "N" || dir === "NE" || dir === "NW") ? 1 : 0,
+      down:  (dir === "S" || dir === "SE" || dir === "SW") ? 1 : 0,
+      left:  (dir === "W" || dir === "NW" || dir === "SW") ? 1 : 0,
+      right: (dir === "E" || dir === "NE" || dir === "SE") ? 1 : 0,
+    };
+  }
+
+  function applyDir(dir) {
+    if (dir === lastDir) return;
+    lastDir = dir;
+    const btns = dirToButtons(dir ?? "");
+    controller1.up    = btns.up;
+    controller1.down  = btns.down;
+    controller1.left  = btns.left;
+    controller1.right = btns.right;
+    syncController();
+  }
+
+  function releaseJoystick() {
+    active = false;
+    thumbX = 0;
+    thumbY = 0;
+    applyDir(null);
+    drawJoystick();
+  }
+
+  // ── Drawing ─────────────────────────────────────────
+
+  function drawJoystick() {
+    const w   = canvas.width;
+    const h   = canvas.height;
+    if (w <= 0 || h <= 0) return;
+    const cx  = w / 2;
+    const cy  = h / 2;
+    const R   = Math.min(cx, cy) - 4;   // base radius
+    const TR  = R * 0.36;               // thumb radius
+    const MAX = R - TR;                 // max thumb travel
+
+    ctx2d.clearRect(0, 0, w, h);
+
+    // Base ring
+    ctx2d.beginPath();
+    ctx2d.arc(cx, cy, R, 0, Math.PI * 2);
+    ctx2d.strokeStyle = "rgba(255,255,255,0.18)";
+    ctx2d.lineWidth   = 2;
+    ctx2d.stroke();
+    ctx2d.fillStyle   = "rgba(255,255,255,0.06)";
+    ctx2d.fill();
+
+    // Cardinal tick marks
+    const ticks = active ? [] : [0, 90, 180, 270]; // hide when dragging
+    for (const deg of [0, 90, 180, 270]) {
+      const rad = (deg - 90) * Math.PI / 180;
+      const ix  = cx + Math.cos(rad) * (R * 0.62);
+      const iy  = cy + Math.sin(rad) * (R * 0.62);
+      const ox  = cx + Math.cos(rad) * (R * 0.82);
+      const oy  = cy + Math.sin(rad) * (R * 0.82);
+      ctx2d.beginPath();
+      ctx2d.moveTo(ix, iy);
+      ctx2d.lineTo(ox, oy);
+      ctx2d.strokeStyle = "rgba(255,255,255,0.22)";
+      ctx2d.lineWidth   = 1.5;
+      ctx2d.stroke();
+    }
+
+    // Direction highlight arc when active
+    if (active && lastDir) {
+      const SECTOR_ANGLE = 45;
+      const NORTH_OFFSET = -90;
+      const dirIndex = ["N","NE","E","SE","S","SW","W","NW"].indexOf(lastDir);
+      const midAngle = dirIndex * SECTOR_ANGLE + NORTH_OFFSET;
+      const startRad = (midAngle - SECTOR_ANGLE / 2) * Math.PI / 180;
+      const endRad   = (midAngle + SECTOR_ANGLE / 2) * Math.PI / 180;
+
+      ctx2d.beginPath();
+      ctx2d.moveTo(cx, cy);
+      ctx2d.arc(cx, cy, R - 1, startRad, endRad);
+      ctx2d.closePath();
+      ctx2d.fillStyle = "rgba(0, 113, 227, 0.28)";
+      ctx2d.fill();
+    }
+
+    // Thumb
+    const tx = cx + thumbX * MAX;
+    const ty = cy + thumbY * MAX;
+
+    // Thumb shadow ring
+    ctx2d.beginPath();
+    ctx2d.arc(tx, ty, TR + 3, 0, Math.PI * 2);
+    ctx2d.fillStyle = "rgba(0,0,0,0.35)";
+    ctx2d.fill();
+
+    // Thumb body
+    ctx2d.beginPath();
+    ctx2d.arc(tx, ty, TR, 0, Math.PI * 2);
+    ctx2d.fillStyle = active
+      ? "rgba(0, 113, 227, 0.85)"
+      : "rgba(255,255,255,0.22)";
+    ctx2d.fill();
+    ctx2d.strokeStyle = active
+      ? "rgba(0, 113, 227, 1)"
+      : "rgba(255,255,255,0.4)";
+    ctx2d.lineWidth = 1.5;
+    ctx2d.stroke();
+  }
+
+  // ── Pointer events ───────────────────────────────────
+
+  function onPointerDown(e) {
+    e.preventDefault();
+    canvas.setPointerCapture(e.pointerId);
+    active = true;
+    updateThumb(e);
+  }
+
+  function onPointerMove(e) {
+    if (!active) return;
+    e.preventDefault();
+    updateThumb(e);
+  }
+
+  function onPointerUp(e) {
+    e.preventDefault();
+    releaseJoystick();
+  }
+
+  function updateThumb(e) {
+    const rect = canvas.getBoundingClientRect();
+    const dpr  = window.devicePixelRatio || 1;
+    const cx   = rect.width  / 2;
+    const cy   = rect.height / 2;
+    const R    = Math.min(cx, cy) - 4;
+    const TR   = R * 0.36;
+    const MAX  = R - TR;
+
+    // Raw offset in CSS pixels
+    let dx = e.clientX - rect.left - cx;
+    let dy = e.clientY - rect.top  - cy;
+
+    // Clamp to unit circle
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    const norm = Math.min(dist, MAX);
+    if (dist > 0) { dx = dx / dist * norm; dy = dy / dist * norm; }
+
+    thumbX = dx / MAX;
+    thumbY = dy / MAX;
+
+    applyDir(snapDir(thumbX, thumbY));
+    drawJoystick();
+  }
+
+  canvas.addEventListener("pointerdown",   onPointerDown,  { passive: false });
+  canvas.addEventListener("pointermove",   onPointerMove,  { passive: false });
+  canvas.addEventListener("pointerup",     onPointerUp,    { passive: false });
+  canvas.addEventListener("pointercancel", onPointerUp,    { passive: false });
+
+  // Re-draw when overlay becomes visible (canvas may have been zero-sized before)
+  new ResizeObserver(() => resizeJoystick()).observe(canvas);
+  resizeJoystick();
 }
 
 // ═══════════════════════════════════════════════════════

@@ -476,56 +476,16 @@ body[data-mode="fullscreen"] .fs-overlay {
 .ss-btn:active,
 .ss-btn.pressed { background: var(--accent); border-color: var(--accent); color: #fff; transform: scale(.94); }
 
-/* ── D-pad ─────────────────────────── */
+/* ── Virtual joystick ──────────────────────────────── */
 
-.dpad-cross {
-  display: grid;
-  gap: 4px;
-  align-items: center;
-  justify-items: center;
-}
-
-.dpad-row {
-  display: flex;
-  justify-content: center;
-  gap: 4px;
-}
-
-.dpad-middle {
-  gap: 4px;
-  align-items: center;
-}
-
-.dpad-center {
-  width: 48px; height: 48px;
-  background: rgba(255,255,255,.06);
-  border-radius: 6px;
-}
-
-.dpad-face {
-  width: 56px; height: 56px;
-  background: rgba(255,255,255,.1);
-  border: 1px solid rgba(255,255,255,.2);
-  color: rgba(255,255,255,.85);
-  font-size: 18px;
-  border-radius: 10px;
-  cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  transition: background .1s, transform .05s;
+.joystick-canvas {
+  display: block;
+  width: 140px;
+  height: 140px;
   touch-action: none;
-  user-select: none;
-  padding: 0;
+  cursor: pointer;
+  border-radius: 50%;
 }
-
-.dpad-face:hover  { background: rgba(255,255,255,.18); }
-.dpad-face:active,
-.dpad-face.pressed { background: var(--accent); border-color: var(--accent); transform: scale(.93); }
-
-/* D-pad directional shapes */
-.dpad-face.up    { border-radius: 10px 10px 4px 4px; }
-.dpad-face.down  { border-radius: 4px 4px 10px 10px; }
-.dpad-face.left  { border-radius: 10px 4px 4px 10px; }
-.dpad-face.right { border-radius: 4px 10px 10px 4px; }
 
 /* ── A/B cluster ───────────────────── */
 
@@ -618,11 +578,10 @@ body[data-mode="fullscreen"] .fs-overlay {
     width: min(calc(100vw - 240px), calc(100vh * 256 / 240));
   }
 
-  .dpad-face { width: 44px; height: 44px; font-size: 14px; }
-  .dpad-center { width: 38px; height: 38px; }
   .ab-btn { width: 56px; height: 56px; font-size: 16px; }
   .ss-btn { padding: 5px 10px; font-size: 11px; min-width: 50px; }
   .ab-select-start { gap: 8px; }
+  .joystick-canvas { width: 110px !important; height: 110px !important; }
 }
 
 /* On desktop: hide touch controller side panels when no touch */
