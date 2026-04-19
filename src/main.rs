@@ -1,5 +1,3 @@
-#![allow(dead_code, unused, unused_variables, unused_imports, unused_comparisons)]
-
 pub mod bus;
 pub mod cpu;
 pub mod interfaces;
@@ -12,7 +10,6 @@ pub use nes::Nes;
 
 use std::fs;
 use std::io::{Write, BufWriter};
-use image::{ImageBuffer, Luma};
 use std::error::Error;
 
 
@@ -87,31 +84,30 @@ fn output_name_table(emu: &Nes, path: &str) -> std::io::Result<()> {
 
 fn output_frame(emu: &Nes, path: &str) -> Result<(), Box<dyn Error>> {
     let frame = emu.frame();
-
     let width = 256;
-    let height = 240; // Nes actual resolution (not 256x256)
+    let height = 240;
 
-    assert_eq!(frame.len(), width * height);
+    let charset = [' ', '.', ':', '-', '=', '+', '*', '#', '%', '@'];
 
-    let mut img = ImageBuffer::<Luma<u8>, Vec<u8>>::new(width as u32, height as u32);
+    let scale_x = 4;
+    let scale_y = 4;
 
-    for y in 0..height {
-        for x in 0..width {
-            let val = frame[y * width + x];
+    let file = fs::File::create(path)?;
+    let mut writer = BufWriter::new(file);
 
-            // Map palette index → grayscale
-            // If values are 0–3:
+    for y in (0..height).step_by(scale_y) {
+        for x in (0..width).step_by(scale_x) {
+            let val = frame[y * width + x] as usize;
 
-            // If values are 0–63 instead, use:
-            // let gray = (val * 4) as u8;
-
-            img.put_pixel(x as u32, y as u32, Luma([val]));
+            let idx = val * (charset.len() - 1) / 63;
+            write!(writer, "{}", charset[idx])?;
         }
+        writeln!(writer)?; // newline
     }
 
-    img.save(path)?;
+    writer.flush()?; // optional but nice
 
-    println!("Saved frame to {}", path);
+    println!("Saved ASCII frame to {}", path);
     Ok(())
 }
 
@@ -135,32 +131,17 @@ fn main() -> std::io::Result<()> {
 
     // Dump before running
     output_pattern_table(&emu, "output/pattern_table_before.txt")?;
-    output_name_table(&emu, "output/name_table_before.txt")?;
-    output_frame(&emu, "output/frame_before.png");
+    output_name_table   (&emu, "output/name_table_before.txt")?;
+    output_frame        (&emu, "output/frame_before.txt");
 
     for frame in 0..100 {
         emu.run_frame();
     }
-    for frame in 0..10 {
-        emu.run_frame();
-//
-        println!("Frame {}", frame);
-        for i in 0u8..10 {
-            println!(
-                "{}: ({}, {}) ID: {:02X} AT: {:02X}",
-                i,
-                emu.bus.ppu.oam.read(i * 4 + 3),
-                emu.bus.ppu.oam.read(i * 4 + 0),
-                emu.bus.ppu.oam.read(i * 4 + 1),
-                emu.bus.ppu.oam.read(i * 4 + 2),
-            );
-        }
-    }
     
     // Dump after running
     output_pattern_table(&emu, "output/pattern_table_after.txt")?;
-    output_name_table(&emu, "output/name_table_after.txt")?;
-    output_frame(&emu, "output/frame_after.png");
+    output_name_table   (&emu, "output/name_table_after.txt")?;
+    output_frame        (&emu, "output/frame_after.txt");
 
     Ok(())
 }

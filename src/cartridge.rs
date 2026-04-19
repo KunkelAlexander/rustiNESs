@@ -108,7 +108,6 @@ impl Cartridge {
             return Err("Unsupported file type".into());
 		}
 
-        println!("Mapper id {}", n_mapper_id);
 
 		// Load appropriate mapper
 		let mapper: Box<dyn MapperInterface> = match n_mapper_id {
