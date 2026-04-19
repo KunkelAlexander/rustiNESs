@@ -29,9 +29,12 @@ This project was written by hand as a learning exercise. I mainly used LLMs for 
 - Controller input
 - Mapper 000 support
 - WebAssembly browser build
-- Test-driven CPU validation
+- CPU validation using Harte tests (you need to download those manually)
 
 ## Devlog
+
+### Day 12: 19.04.2025
+- Clean-up! 
 
 ### Day 11: 18.04.2025
 
@@ -51,6 +54,10 @@ This project was written by hand as a learning exercise. I mainly used LLMs for 
 - Instead, the CPU talks to the PPU via a secret 9th register that can only be written to 
 - Writing to this secret register starts sorcery called Direct Memory Address (DMA)
 - Upon writing to the DMA register, the CPU is suspended - the clock is switched off, and for the subsequent 512 clock cycles bytes are written from the CPU memory and written to the PPU
+
+
+![](figures/30.png)
+
 - DMA writes a page from the CPU memory to the PPU memory in one go - this is four times faster than manually transferring data. 
 - I implemented the DMA and can confirm that the output for the Donkey Kong menu cursor sprite is the same as in the video :) 
 
@@ -79,6 +86,12 @@ This project was written by hand as a learning exercise. I mainly used LLMs for 
 - Orientation: We can instruct the PPU to draw the sprite inverted in both axes. This means that we don't need two sprites for Mario running left and right 
 - Horizontal flipping: invert bits from 00000111 to 11100000
 - Vertical flipping: We need to actually read elsewhere - this is easier for 8x8 than for 8x16 tiles
+- There is one more complication - many games want to show a static status bar and scroll below
+- This is solved by detecting the collision of sprite 0 with the scanline. If the scaneline hits sprite 0 and we know its location, the CPU can change rendering behaviour. 
+- For instance, Mario does this by rendering the bottom half of the coin in the status bar as sprite 0. Once the scanline hits sprite 0, the CPU knows that it can start scrolling.
+
+![](figures/31.png)
+
 - I gave implementing the sprite rendering a first go, and behold: Donkey Kong & Super Mario Bros seem to be working - YAY!!!! 
 
 <p align="center">
@@ -145,7 +158,6 @@ This project was written by hand as a learning exercise. I mainly used LLMs for 
 - To get things to render properly, we need to count scanlines and cycles which is where [this handy diagram](https://www.nesdev.org/w/images/default/4/4f/Ppu.svg) from nesdev comes in
 
 ![](figures/23.png)
-
 
 - 8 cycles represent 1 row of one tile
 - During thoses 8 cycles, it loads the next 8 bytes for the next 8 cycles: It loads one nametable byte, one attribute byte and the pattern itself (2 bytes)

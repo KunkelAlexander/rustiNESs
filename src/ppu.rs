@@ -67,7 +67,7 @@ impl Sprite {
 
 #[derive(Copy, Clone)]
 pub struct SpriteArray<const N: usize> {
-    pub sprites: [Sprite; N],    
+    sprites: [Sprite; N],    
 }
 
 impl<const N: usize> Default for SpriteArray<N> {
@@ -109,13 +109,12 @@ pub struct Olc2c02 {
     table_name:            [u8; 2*1024],              // 2 KB of physical VRAM for the name tables
     table_palette:         [u8; 32],                  // 32 Bytes physical VRAM for the palletes
     table_pattern:         [u8; 2*4096],              // 8 KB of physical VRAM for the patterns
-    sprite_name_table:     [u8; SCREEN_H*SCREEN_W*2], // Helper for visualisation
     scanline:               u16, 
     cycle:                  u16, 
     pub frame_complete:     bool,
     noise_state:            u32,
 
-    // registers
+    // Registers
     status:                 u8,
     mask:                   u8,
     control:                u8,
@@ -137,8 +136,7 @@ pub struct Olc2c02 {
     bg_next_tile_id:        u8,
     bg_next_tile_attrib:    u8,
 
-    // Sprite memory
-    // public because we need access from the bus for the DMA operation
+    // Sprite memory is public because we need access from the bus for the DMA operation
     pub oam:               OAM,
     pub oam_addr:          u8,
 
@@ -146,22 +144,25 @@ pub struct Olc2c02 {
     sprite_count:          u8,
     sp_shifter_pattern_lo: [u8; 8], 
     sp_shifter_pattern_hi: [u8; 8],
+
+    // There is a single flag that indicates whether a sprite overlaps with a background tile
+    // This is only done for one sprite - sprite 0
+    // This is done for synchronising the PPU with the CPU 
+    // The CPU periodically examines the sprite zero hit flag periodically and gets an idea of how far down the scanline has gone
+    // This is important for status bars - a static bar is rendered up to a given scanline and then the game is rendered normally below
+    // The sprite 0 tells us where to start normal rendering
     b_sp_0_being_rendered: bool,
     b_sp_0_hit_possible:   bool
 }
 
 impl Olc2c02 {
-    // =====================
-    // STATUS (0x2002)
-    // =====================
+    // masks for self.status
     pub const STATUS_UNUSED:                u8 = 0b0001_1111;
     pub const STATUS_SPRITE_OVERFLOW:       u8 = 1 << 5;
     pub const STATUS_SPRITE_ZERO_HIT:       u8 = 1 << 6;
     pub const STATUS_VERTICAL_BLANK:        u8 = 1 << 7;
 
-    // =====================
-    // MASK (0x2001)
-    // =====================
+    // masks for self.mask
     pub const MASK_GRAYSCALE:               u8 = 1 << 0;
     pub const MASK_RENDER_BACKGROUND_LEFT:  u8 = 1 << 1;
     pub const MASK_RENDER_SPRITES_LEFT:     u8 = 1 << 2;
@@ -171,9 +172,7 @@ impl Olc2c02 {
     pub const MASK_ENHANCE_GREEN:           u8 = 1 << 6;
     pub const MASK_ENHANCE_BLUE:            u8 = 1 << 7;
 
-    // =====================
-    // CONTROL (0x2000)
-    // =====================
+    // masks for self.control
     pub const CTRL_NAMETABLE_X:             u8 = 1 << 0;
     pub const CTRL_NAMETABLE_Y:             u8 = 1 << 1;
     pub const CTRL_INCREMENT_MODE:          u8 = 1 << 2;
@@ -191,7 +190,6 @@ impl Olc2c02 {
             table_name:             [0x00; 2*1024], 
             table_palette:          [0x00; 32],
             table_pattern:          [0x00; 2*4096],    
-            sprite_name_table:      [0x00; SCREEN_H*SCREEN_W*2],
             scanline:                0, 
             cycle:                   0,
             frame_complete:          false,
@@ -328,7 +326,7 @@ impl Olc2c02 {
 
             self.update_shifters();
 
-            match ((self.cycle - 1) % 8) {
+            match (self.cycle - 1) % 8 {
                 0 => {
                     self.load_background_shifters();
 
@@ -347,22 +345,18 @@ impl Olc2c02 {
                     self.bg_next_tile_attrib &= 0x03;
                 }
                 4 => {
-                    let addr = (
-                        (((((self.control & Olc2c02::CTRL_PATTERN_BACKGROUND) as u16) >> 4) << 12) as u16)
-                        + ((self.bg_next_tile_id as u16) << 4) 
-                        + (self.vram_addr.fine_y as u16)
-                    );
+                    let addr = (((((self.control & Olc2c02::CTRL_PATTERN_BACKGROUND) as u16) >> 4) << 12) as u16)
+                                  + ((self.bg_next_tile_id as u16) << 4) 
+                                  + (self.vram_addr.fine_y as u16);
 
                     self.bg_next_tile_lsb = self.read_ppu(addr, cartridge).unwrap_or(0);
                 }
 
                 6 => {
-                    let addr = (
-                        (((((self.control & Olc2c02::CTRL_PATTERN_BACKGROUND) as u16) >> 4) << 12) as u16)
-                        + ((self.bg_next_tile_id as u16) << 4) 
-                        + (self.vram_addr.fine_y as u16)
-                        + 8
-                    );
+                    let addr = (((((self.control & Olc2c02::CTRL_PATTERN_BACKGROUND) as u16) >> 4) << 12) as u16)
+                                  + ((self.bg_next_tile_id as u16) << 4) 
+                                  + (self.vram_addr.fine_y as u16)
+                                  + 8;
 
                     self.bg_next_tile_msb = self.read_ppu(addr, cartridge).unwrap_or(0);
                 }
@@ -437,10 +431,10 @@ impl Olc2c02 {
         if render_scanline && self.cycle == 340 {
             for i in 0u8..self.sprite_count {
 
-                let mut sprite_pattern_bits_lo: u8  = 0x00;
-                let mut sprite_pattern_bits_hi: u8  = 0x00;
-                let mut sprite_pattern_addr_lo: u16 = 0x0000;
-                let mut sprite_pattern_addr_hi: u16 = 0x0000;
+                let mut sprite_pattern_bits_lo: u8;
+                let mut sprite_pattern_bits_hi: u8;
+                let sprite_pattern_addr_lo: u16;
+                let sprite_pattern_addr_hi: u16;
 
                 let sprite = self.sprite_scanline.sprites[i as usize];
 
@@ -529,7 +523,6 @@ impl Olc2c02 {
                 sprite_pattern_bits_hi = self.read_ppu(sprite_pattern_addr_hi, cartridge).unwrap_or(0);
 
                 // if the sprite is flipped horizontally, we need to flip the pattern bytes
-
                 if sprite.attribute & 0x40 != 0 {
                     sprite_pattern_bits_lo = sprite_pattern_bits_lo.reverse_bits();
                     sprite_pattern_bits_hi = sprite_pattern_bits_hi.reverse_bits();
@@ -843,7 +836,7 @@ impl PpuInterface for Olc2c02 {
 
         if let Some(data) = cartridge.read_ppu(addr) {
             return Some(data);
-        } else if addr >= 0x0000 && addr <= 0x1FFF
+        } else if addr <= 0x1FFF
         {
             // If the cartridge cant map the address, have
             // a physical location ready here
@@ -877,7 +870,7 @@ impl PpuInterface for Olc2c02 {
 
         if let Some(_) = cartridge.write_ppu(addr & 0x3FFF, data) {
 
-        } else if addr >= 0x0000 && addr <= 0x1FFF
+        } else if addr <= 0x1FFF
         {
             let table = (addr & 0x1000) >> 12; // 0 or 1
             let offset = addr & 0x0FFF;        // 0..4095
