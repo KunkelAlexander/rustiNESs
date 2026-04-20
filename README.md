@@ -1,10 +1,5 @@
 # RustiNESs
 
-![Rust](https://img.shields.io/badge/Rust-stable-orange)
-![WASM](https://img.shields.io/badge/WebAssembly-enabled-blue)
-![Status](https://img.shields.io/badge/status-WIP-yellow)
-![License](https://img.shields.io/badge/license-MIT-green)
-
 A Nintendo Entertainment System (NES) emulator written in Rust, built for learning, experimentation, and clean architecture.
 
 It currently emulates the 6502 CPU, the PPU, controller input, DMA, and Mapper 000, and can already run games like **Donkey Kong** and **Super Mario Bros.**
