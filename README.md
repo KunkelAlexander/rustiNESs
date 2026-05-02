@@ -1,15 +1,10 @@
 # RustiNESs
 
-![Rust](https://img.shields.io/badge/Rust-stable-orange)
-![WASM](https://img.shields.io/badge/WebAssembly-enabled-blue)
-![Status](https://img.shields.io/badge/status-WIP-yellow)
-![License](https://img.shields.io/badge/license-MIT-green)
-
 A Nintendo Entertainment System (NES) emulator written in Rust, built for learning, experimentation, and clean architecture.
 
 It currently emulates the 6502 CPU, the PPU, controller input, DMA, and Mapper 000, and can already run games like **Donkey Kong** and **Super Mario Bros.**
 
-**Play it in the browser:** [RustiNESs Web Demo](https://kunkelalexander.github.io/rustiNESs/)  
+**Play it in the browser:** [RustiNESs Web](https://kunkelalexander.github.io/rustiNESs/)  
 **Based on:** [javidx9's NES Emulator series](https://www.youtube.com/playlist?list=PLrOv9FMX8xJHqMvSGB_9G9nZZ_4IgteYf)
 
 <p align="center">
@@ -33,6 +28,22 @@ This project was written by hand as a learning exercise. I mainly used LLMs for 
 
 ## Devlog
 
+
+### Day 13: 01.05.2025
+- Watch [NES Emulator Part #6: APU - Sounds, Beeps & Bloops](https://www.youtube.com/watch?v=72dI7dB3ZvQ)
+- Sound is unforgiving - we need to make sure that the timing is perfect
+- We cannot just issue sound samples to the audio device, instead we need to send them at the rate that the audio device expects
+- The audio device runs in its own thread and requests a sample of sound when it needs it
+- Retro sound: Approximate pulse-square waves using Fourier transform
+- NES APU has [five audio sources](https://www.nesdev.org/wiki/APU): 
+    - two pulse-square waves with different duty cycles for melodies
+    - sawtooth for base sounds
+    - noise channel for percussion 
+    - sample playing channel for waveforms
+
+![](figures/32.png)
+
+- The five pathways are summed to 
 ### Day 12: 19.04.2025
 - Clean-up! 
 
@@ -103,7 +114,7 @@ This project was written by hand as a learning exercise. I mainly used LLMs for 
 
 ### Day 11: 14.04.2025
 
-- Watch [ NES Emulator Part #5: PPU - Foreground Rendering ](https://www.youtube.com/watch?v=cksywUTZxlY)
+- Watch [NES Emulator Part #5: PPU - Foreground Rendering](https://www.youtube.com/watch?v=cksywUTZxlY)
 
 
 - 8 NES buttons are represented via one byte
