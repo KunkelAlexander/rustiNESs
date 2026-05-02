@@ -1,5 +1,6 @@
-use crate::interfaces::{CartridgeInterface, BusInterface, PpuInterface};
+use crate::interfaces::{CartridgeInterface, BusInterface, PpuInterface, ApuInterface};
 use crate::ppu::Olc2c02;
+use crate::apu::Olc2A03;
 
 // SimpleBus only containing 64 KB of RAM used in 6502 demo
 pub struct SimpleBus {
@@ -39,6 +40,7 @@ impl BusInterface for SimpleBus {
 pub struct Bus {
     cpu_ram:              [u8; 2048],
     pub ppu:              Olc2c02,
+    pub apu:              Olc2A03,
     cartridge:            Box<dyn CartridgeInterface>,
     pub controller:       [u8; 2], // this needs to be set externally
     controller_state:     [u8; 2], // store snapshots of the inputs when the corresponding memory address is written to. 
@@ -59,6 +61,7 @@ impl Bus {
         Self {
             cpu_ram:             [0; 2048],
             ppu:                 Olc2c02::new(),
+            apu:                 Olc2A03::new(),
             cartridge:           cartridge,
             controller:          [0; 2],
             controller_state:    [0; 2],
@@ -88,6 +91,7 @@ impl Bus {
     }
     
     pub fn reset(&mut self) {
+        self.apu.reset();
         self.ppu.reset(); 
         self.cartridge.reset();
         
@@ -100,6 +104,7 @@ impl Bus {
 
     pub fn clock(&mut self) {
         self.ppu.clock(self.cartridge.as_mut());
+        self.apu.clock();
     }
 
     pub fn insert_cartridge(&mut self, cartridge: Box<dyn CartridgeInterface>) {
@@ -158,11 +163,16 @@ impl BusInterface for Bus {
         {
            self.cpu_ram[(addr & 0x07FF) as usize] = data;
         }
-        // PPU Address range, mirrored every 8 bytes
+        // PPU address range, mirrored every 8 bytes
         else if addr >= 0x2000 && addr <= 0x3FFF
         {
             self.ppu.write_cpu(addr & 0x0007, data, self.cartridge.as_mut());
         }
+        // APU address range
+        else if (addr >= 0x4000 && addr <= 0x4013) || addr == 0x4015 || addr == 0x4017 
+        {
+            self.apu.write_cpu(addr, data);
+        }        
         // DMA - Start DMA transfer in bus when this address is written to 
         else if addr == 0x4014
         {

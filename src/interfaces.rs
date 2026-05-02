@@ -31,3 +31,8 @@ pub trait MapperInterface {
     fn ppu_map_write(&mut self, addr: u16, data: u8) -> Option<usize>;
     fn reset(&mut self);
 }
+
+pub trait ApuInterface { 
+    fn read_cpu (&mut self, addr: u16,         ) -> u8; 
+    fn write_cpu(&mut self, addr: u16, data: u8);
+}

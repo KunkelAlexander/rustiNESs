@@ -2,6 +2,7 @@ pub mod bus;
 pub mod cpu;
 pub mod interfaces;
 pub mod ppu;
+pub mod apu;
 pub mod cartridge;
 pub mod mapper;
 pub mod nes;
