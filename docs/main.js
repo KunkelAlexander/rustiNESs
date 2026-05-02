@@ -7,6 +7,8 @@ import init, { NES } from "./pkg/nes_emulator.js";
 let emu        = null;
 let running    = false;
 let rafHandle  = null;
+let audioCtx   = null;
+let nesNode    = null;
 
 // "nes" | "cpu" | "fullscreen"
 let mode       = "nes";
@@ -203,6 +205,39 @@ function renderPatternTables() {
 }
 
 // ═══════════════════════════════════════════════════════
+//  Audio
+// ═══════════════════════════════════════════════════════
+
+async function initAudio() {
+  log("x");
+    const blob = new Blob([`
+    class NESProcessor extends AudioWorkletProcessor {
+      constructor() {
+        super();
+        this.ring = new Float32Array(32768);
+        this.w = 0; this.r = 0;
+        this.port.onmessage = ({data}) => {
+          for (const s of data) this.ring[this.w++ % 32768] = s;
+        };
+      }
+      process(_, outputs) {
+        const out = outputs[0][0];
+        if (this.w - this.r < out.length) { out.fill(0); return true; }
+        for (let i = 0; i < out.length; i++) out[i] = this.ring[this.r++ % 32768];
+        return true;
+      }
+    }
+    registerProcessor("nes-processor", NESProcessor);
+  `], { type: "application/javascript" });
+
+  audioCtx = new AudioContext({ sampleRate: 44100 });
+  await audioCtx.audioWorklet.addModule(URL.createObjectURL(blob));
+  nesNode = new AudioWorkletNode(audioCtx, "nes-processor");
+  nesNode.connect(audioCtx.destination);
+
+}
+
+// ═══════════════════════════════════════════════════════
 //  Run loops
 //  Three independent loops: cpu-debug, nes-debug, nes-fullscreen
 // ═══════════════════════════════════════════════════════
@@ -227,6 +262,8 @@ function frame() {
     } else if (mode === "fullscreen") {
       // Fullscreen: run full frame, render to fullscreen canvas ONLY — no debug work
       emu.run_frame();
+      const samples = emu.get_audio_samples();
+      nesNode.port.postMessage(samples);
       renderFullscreenFrame();
       // No updateDebugUI, no renderPatternTables, no log
     }
@@ -346,6 +383,11 @@ async function enterFullscreen() {
     // Browser denied (e.g. iframe sandbox) — overlay already visible, carry on.
     log(`Native fullscreen unavailable: ${e.message ?? e}`);
   }
+  if (audioCtx?.state === "suspended") await audioCtx.resume()
+
+  // Pre-fill ~10 frames worth of silence so worklet starts with headroom
+  const prefill = new Float32Array(735 * 10);
+  nesNode.port.postMessage(prefill);
 
   $("fsScreen")?.focus();
   startRun();
@@ -783,9 +825,11 @@ async function boot() {
 
     bindUI();
     initCanvas();
+    await initAudio();
     updateDebugUI();
 
-    log("Emulator ready.");
+    log("Emulator ready");
+    
     startRun();
   } catch (e) {
     console.error(e);

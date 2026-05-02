@@ -7,6 +7,7 @@ export class NES {
     clock(): void;
     cpu_clock(): void;
     frame(): Uint8Array;
+    get_audio_samples(): Float32Array;
     get_cpu_state(): Uint32Array;
     get_pattern_table(table: number, palette: number): Uint8Array;
     get_ram(start: number, len: number): Uint8Array;
@@ -28,6 +29,7 @@ export interface InitOutput {
     readonly nes_clock: (a: number) => void;
     readonly nes_cpu_clock: (a: number) => void;
     readonly nes_frame: (a: number) => [number, number];
+    readonly nes_get_audio_samples: (a: number) => [number, number];
     readonly nes_get_cpu_state: (a: number) => [number, number];
     readonly nes_get_pattern_table: (a: number, b: number, c: number) => [number, number];
     readonly nes_get_ram: (a: number, b: number, c: number) => [number, number];

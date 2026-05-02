@@ -43,7 +43,12 @@ This project was written by hand as a learning exercise. I mainly used LLMs for 
 
 ![](figures/32.png)
 
-- The five pathways are summed to 
+- Sound emulation here? The sound thread runs in real-time and NES emulation is fast
+- Every time the sound thread requests a sample, we perform enough NES emulation to provide the sound
+- The sound thread controls the NES emulation - This is called synchronising to sound
+- For fun, I tried to not do this and just send audio samples to a ring buffer - the speed of the emulation is controlled by the 60 FPS loop in html
+    - It get terrible-sounding buffer underruns. Audio is really a different beast. 
+    
 ### Day 12: 19.04.2025
 - Clean-up! 
 

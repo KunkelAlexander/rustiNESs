@@ -9,6 +9,8 @@ pub struct Nes {
     cpu:                  Olc6502,
     bus:                  Bus,
     system_clock_counter: u32,
+    audio_buffer: Vec<f32>,
+    sine_phase:   f64,
 }
 
 impl Nes {
@@ -17,9 +19,20 @@ impl Nes {
             cpu:                  Olc6502::new(),
             bus:                  Bus::new(Box::new(EmptyCartridge)),
             system_clock_counter: 0,
+            audio_buffer: Vec::new(),
+            sine_phase:   0.0,
+        }
+    }
+    pub fn generate_audio_frame(&mut self) {
+        for _ in 0..735 {
+            self.audio_buffer.push((self.sine_phase * std::f64::consts::TAU).sin() as f32 * 0.3);
+            self.sine_phase = (self.sine_phase + 440.0 / 44100.0).fract();
         }
     }
 
+    pub fn drain_audio_samples(&mut self) -> Vec<f32> {
+        std::mem::take(&mut self.audio_buffer)
+    }
     pub fn reset(&mut self) {
         self.bus.reset();
         self.cpu.reset(&mut self.bus);

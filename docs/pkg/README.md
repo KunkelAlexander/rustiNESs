@@ -1,12 +1,53 @@
 # RustiNESs
 
-A simple Nintendo Entertainment System (NES) emulator written in **Rust**, built for learning and experimentation.
+A Nintendo Entertainment System (NES) emulator written in Rust, built for learning, experimentation, and clean architecture.
 
-This project aims to incrementally emulate the original NES hardware, starting with the **6502 CPU** and gradually adding the PPU, APU, cartridge mappers, and input devices.
+It currently emulates the 6502 CPU, the PPU, controller input, DMA, and Mapper 000, and can already run games like **Donkey Kong** and **Super Mario Bros.**
+
+**Play it in the browser:** [RustiNESs Web](https://kunkelalexander.github.io/rustiNESs/)  
+**Based on:** [javidx9's NES Emulator series](https://www.youtube.com/playlist?list=PLrOv9FMX8xJHqMvSGB_9G9nZZ_4IgteYf)
+
+<p align="center">
+  <img src="figures/2.gif" alt="Demo">
+</p>
+
+## Learning Approach
+
+This project was written by hand as a learning exercise. I mainly used LLMs for explanations, discussion, and a few repetitive tasks, while keeping the emulator implementation itself manual.
+
+
+## Features
+
+- 6502 CPU emulation
+- PPU background and sprite rendering
+- DMA transfers to OAM
+- Controller input
+- Mapper 000 support
+- WebAssembly browser build
+- CPU validation using Harte tests (you need to download those manually)
 
 ## Devlog
 
-## Day 11: 18.04.2025
+
+### Day 13: 01.05.2025
+- Watch [NES Emulator Part #6: APU - Sounds, Beeps & Bloops](https://www.youtube.com/watch?v=72dI7dB3ZvQ)
+- Sound is unforgiving - we need to make sure that the timing is perfect
+- We cannot just issue sound samples to the audio device, instead we need to send them at the rate that the audio device expects
+- The audio device runs in its own thread and requests a sample of sound when it needs it
+- Retro sound: Approximate pulse-square waves using Fourier transform
+- NES APU has [five audio sources](https://www.nesdev.org/wiki/APU): 
+    - two pulse-square waves with different duty cycles for melodies
+    - sawtooth for base sounds
+    - noise channel for percussion 
+    - sample playing channel for waveforms
+
+![](figures/32.png)
+
+- The five pathways are summed to 
+### Day 12: 19.04.2025
+- Clean-up! 
+
+### Day 11: 18.04.2025
 
 - Sprites get stored in their own internal memory of the PPU - the Object Attribute Memory (OAM)
 - OAM is 256 bytes of storage exclusive to the internals of the PPU
@@ -24,6 +65,10 @@ This project aims to incrementally emulate the original NES hardware, starting w
 - Instead, the CPU talks to the PPU via a secret 9th register that can only be written to 
 - Writing to this secret register starts sorcery called Direct Memory Address (DMA)
 - Upon writing to the DMA register, the CPU is suspended - the clock is switched off, and for the subsequent 512 clock cycles bytes are written from the CPU memory and written to the PPU
+
+
+![](figures/30.png)
+
 - DMA writes a page from the CPU memory to the PPU memory in one go - this is four times faster than manually transferring data. 
 - I implemented the DMA and can confirm that the output for the Donkey Kong menu cursor sprite is the same as in the video :) 
 
@@ -52,13 +97,24 @@ This project aims to incrementally emulate the original NES hardware, starting w
 - Orientation: We can instruct the PPU to draw the sprite inverted in both axes. This means that we don't need two sprites for Mario running left and right 
 - Horizontal flipping: invert bits from 00000111 to 11100000
 - Vertical flipping: We need to actually read elsewhere - this is easier for 8x8 than for 8x16 tiles
+- There is one more complication - many games want to show a static status bar and scroll below
+- This is solved by detecting the collision of sprite 0 with the scanline. If the scaneline hits sprite 0 and we know its location, the CPU can change rendering behaviour. 
+- For instance, Mario does this by rendering the bottom half of the coin in the status bar as sprite 0. Once the scanline hits sprite 0, the CPU knows that it can start scrolling.
 
+![](figures/31.png)
 
+- I gave implementing the sprite rendering a first go, and behold: Donkey Kong & Super Mario Bros seem to be working - YAY!!!! 
 
-## Day 11: 14.04.2025
+<p align="center">
+  <img src="figures/1.gif" alt="Demo">
+</p>
 
+- I tried to improve the UI, but the LLM code is just abysmal - I will redo the UI from scratch I guess 
+- Claude actually fixed the UI code while maintaining much of it. Great! 
 
-- Watch [ NES Emulator Part #5: PPU - Foreground Rendering ](https://www.youtube.com/watch?v=cksywUTZxlY)
+### Day 11: 14.04.2025
+
+- Watch [NES Emulator Part #5: PPU - Foreground Rendering](https://www.youtube.com/watch?v=cksywUTZxlY)
 
 
 - 8 NES buttons are represented via one byte
@@ -75,14 +131,13 @@ This project aims to incrementally emulate the original NES hardware, starting w
 
 
 
-
-## Day 10: 12.04.2025
+### Day 10: 12.04.2025
 - Hallelujah: `nestest.nes` and `smb.nes` backgrounds are rendered correctly! 
 
 ![](figures/25.png)
 ![](figures/26.png)
 
-## Day 9: 11.04.2025
+### Day 9: 11.04.2025
 - Fix bug in CPU NMI code 
 - Load `smb.nes` and show pattern table
 
@@ -115,13 +170,12 @@ This project aims to incrementally emulate the original NES hardware, starting w
 
 ![](figures/23.png)
 
-
 - 8 cycles represent 1 row of one tile
 - During thoses 8 cycles, it loads the next 8 bytes for the next 8 cycles: It loads one nametable byte, one attribute byte and the pattern itself (2 bytes)
 - This repeats for the 256 visible pixels and then we get to the cycles where nothing is rendered (257 - 340)
 - Loopy address (named after a wonderful person called loopy): Internal address for the PPU that correlates the scanline position to everything else, explained [here](https://www.nesdev.org/wiki/PPU_scrolling)
 
-## Day 8: 02.04.2026
+### Day 8: 02.04.2026
 - Finish pattern table viewer 
 - To render stuff, the PPU needs three things: 
     - The pattern data at 0x000-0x1FFF stored in CHR (ROM or RAM) that defines whether a pixel is 0, 1, 2 or 3 
@@ -132,7 +186,7 @@ This project aims to incrementally emulate the original NES hardware, starting w
 - Load `nestest.nes` from [Nesdev.org](https://www.nesdev.org/wiki/Emulator_tests) and show pattern table
 ![](figures/18.png)
 
-## Day 7: 07.03.2026
+### Day 7: 07.03.2026
 
 - Watch [NES Emulator Part #4: PPU - Background Rendering](https://www.youtube.com/watch?v=-THeUXqR3zY)
 
@@ -170,7 +224,7 @@ This project aims to incrementally emulate the original NES hardware, starting w
 
 ![](figures/17.png)
 
-## Day 6: 28.02.2026
+### Day 6: 28.02.2026
 
 - PPU now wired up in the web interface
 
@@ -230,7 +284,7 @@ classDiagram
     MapperInterface <|.. Mapper000
 ```
 
-## Day 5: 23.02.2026
+### Day 5: 23.02.2026
 - Watch [NES Emulator Part #3: Buses, RAMs, ROMs & Mappers](https://www.youtube.com/watch?v=xdzOvpYPmGE)
 
 - The RAM has 8 kB of addressable space but actually it's 8 kB mod 2kB - an idea called mirroring
@@ -324,38 +378,32 @@ classDiagram
     - 4) Execute
     - 5) Wait, count cycles, complete
 
-
-## Goals
-
-- Learn low-level hardware emulation
-- Learn Rust
-- Build a reasonably accurate (but readable) NES emulator
-- Keep the architecture modular and testable
-
 ## Project Structure
 
 ```
 src/
-├── main.rs    # Entry point
-├── cpu.rs     # 6502 core (registers, execution)
+├── main.rs          # Entry point
+├── cpu.rs           # 6502 core (registers, execution)
+├── ppu.rs           # Pixel processing unit - the GPU
+├── cartridge.rs     # Cartridge template
+├── mapper.rs        # Add more mappers here
+├── bus.rs           # Contains RAM, PPU, cartridge and controller, but not the CPU to avoid rust's double borrow checks
+├── nes.rs           # Contains the bus, the CPU, handles DMA and defines all user-facing functions
+├── interfaces.rs    # Defines virtual interfaces for all components to minimise coupling
+├── lib.rs           # Web assembly wrapper for actually using the emulator in a browser
+├── main.rs          # Local debug code, no GUI
+
+figures/             # Figures used for the README
+tests/               # Harte CPU tests
 ```
 
 
 ## Building
 
+- Local application for debugging: `cargo run`
 - WASM library for the web application:  `wasm-pack build --target web --out-dir docs/pkg`
-- Test with `python -m http.server`
+- Test the web application with `python -m http.server` and go to `http://localhost:8000/docs/` in your browser - I tested the application with Firefox
 - Tests: `cargo test --release -- --nocapture`
-## Current Status
-
-- [x] CPU registers
-- [x] Memory bus
-- [x] Instruction fetch/decode/execute
-- [ ] Cycle accuracy
-- [ ] PPU
-- [ ] APU
-- [ ] Input
-- [ ] Mapper support
 
 
 ## License

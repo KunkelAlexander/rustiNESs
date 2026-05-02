@@ -37,6 +37,7 @@ impl NES {
 
     pub fn run_frame(&mut self) {
         self.inner.run_frame();
+        self.inner.generate_audio_frame();
     }
 
     pub fn insert_cartridge(&mut self, cartridge_data: &[u8]) -> Result<(), String> {
@@ -74,5 +75,9 @@ impl NES {
     pub fn set_controller(&mut self, i: usize, x: bool, z: bool, a: bool, s: bool, up: bool, down: bool, left: bool, right: bool) {
         self.inner
             .set_controller(i, x, z, a, s, up, down, left, right);
+    }
+
+    pub fn get_audio_samples(&mut self) -> Vec<f32> {
+        self.inner.drain_audio_samples()
     }
 }
