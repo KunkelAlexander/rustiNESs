@@ -27,17 +27,10 @@ impl SimpleBus {
 
 impl BusInterface for SimpleBus {
     fn read(&mut self, addr: u16, _read_only: bool) -> u8 {
-        if addr >= 0x0000 && addr <= 0xFFFF {
-           self.ram[addr as usize]
-        } else {
-            0
-        }
+        self.ram[addr as usize]
     }
     fn write(&mut self, addr: u16, data: u8) {
-        if addr >= 0x0000 && addr <= 0xFFFF {
-            self.ram[addr as usize] = data;
-        }
-        
+        self.ram[addr as usize] = data;        
     }
 }
 
@@ -137,17 +130,17 @@ impl BusInterface for Bus {
             return data;
         }
         // System RAM (mirrored every 2 KB)
-        if (addr >= 0x0000 && addr <= 0x1FFF)
+        if addr <= 0x1FFF
         {
            return self.cpu_ram[(addr & 0x07FF) as usize];
         }
         // PPU Address range, mirrored every 8 bytes
-        if (addr >= 0x2000 && addr <= 0x3FFF)
+        if addr >= 0x2000 && addr <= 0x3FFF
         {
             return self.ppu.read_cpu(addr & 0x0007, read_only, self.cartridge.as_mut());
         }
         // Read most significant bit of controller state via pop
-        else if (addr >= 0x4016 && addr <= 0x4017)
+        else if addr >= 0x4016 && addr <= 0x4017
         {
             let temp = ((self.controller_state[(addr & 0x0001) as usize] & 0x80) > 0) as u8;
             self.controller_state[(addr & 0x0001) as usize] <<= 1; 
@@ -161,17 +154,17 @@ impl BusInterface for Bus {
         if self.cartridge.write_cpu(addr, data).is_some() {
         }
         // System RAM (mirrored every 2 KB)
-        else if (addr >= 0x0000 && addr <= 0x1FFF)
+        else if addr <= 0x1FFF
         {
            self.cpu_ram[(addr & 0x07FF) as usize] = data;
         }
         // PPU Address range, mirrored every 8 bytes
-        else if (addr >= 0x2000 && addr <= 0x3FFF)
+        else if addr >= 0x2000 && addr <= 0x3FFF
         {
             self.ppu.write_cpu(addr & 0x0007, data, self.cartridge.as_mut());
         }
         // DMA - Start DMA transfer in bus when this address is written to 
-        else if (addr == 0x4014)
+        else if addr == 0x4014
         {
             self.dma_page     = data; 
             self.dma_addr     = 0x00; 
@@ -179,7 +172,7 @@ impl BusInterface for Bus {
             self.dma_dummy    = true;
         }
         // Copy external controller state into internal register
-        else if (addr >= 0x4016 && addr <= 0x4017)
+        else if addr >= 0x4016 && addr <= 0x4017
         {
             self.controller_state[(addr & 0x0001) as usize] = self.controller[(addr & 0x0001) as usize];
         }
