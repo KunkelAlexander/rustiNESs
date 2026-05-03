@@ -1,5 +1,26 @@
 use crate::interfaces::{MapperInterface};
 
+pub enum Mapper {
+    Mapper000(Mapper000),
+}
+
+impl MapperInterface for Mapper {
+    fn cpu_map_read(&self, addr: u16) -> Option<usize> {
+        match self { Mapper::Mapper000(m) => m.cpu_map_read(addr) }
+    }
+    fn cpu_map_write(&mut self, addr: u16, data: u8) -> Option<usize> {
+        match self { Mapper::Mapper000(m) => m.cpu_map_write(addr, data) }
+    }
+    fn ppu_map_read(&self, addr: u16) -> Option<usize> {
+        match self { Mapper::Mapper000(m) => m.ppu_map_read(addr) }
+    }
+    fn ppu_map_write(&mut self, addr: u16, data: u8) -> Option<usize> {
+        match self { Mapper::Mapper000(m) => m.ppu_map_write(addr, data) }
+    }
+    fn reset(&mut self) {
+        match self { Mapper::Mapper000(m) => m.reset() }
+    }
+}
 
 pub struct Mapper000 {
     pub prg_banks: u8,

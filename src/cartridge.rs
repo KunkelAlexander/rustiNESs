@@ -1,5 +1,5 @@
 use crate::interfaces::{CartridgeInterface, MapperInterface};
-use crate::mapper::Mapper000;
+use crate::mapper::{Mapper, Mapper000};
 
 // Documentation on cartridge formats
 // https://nescartdb.com/
@@ -30,7 +30,7 @@ pub struct Cartridge {
     //n_prg_banks:  u8,                       // how many banks of prg memory? 
     //n_chr_banks:  u8,                       // how many banks of chr memory?
     mirror:       MIRROR,
-    mapper:       Box<dyn MapperInterface>, // Reference to mapper
+    mapper:       Mapper, // Reference to mapper
 }
 
 impl Cartridge {
@@ -98,10 +98,13 @@ impl Cartridge {
 
 
 		// Load appropriate mapper
-		let mapper: Box<dyn MapperInterface> = match n_mapper_id {
-		 0 => Box::new(Mapper000 { prg_banks: header.prg_rom_chunks, chr_banks: header.chr_rom_chunks }),
-         _ => return Err("Unsupported mapper".into()),
-		};
+		let mapper = match n_mapper_id {
+            0 => Mapper::Mapper000(Mapper000 { 
+                prg_banks: header.prg_rom_chunks, 
+                chr_banks: header.chr_rom_chunks 
+            }),
+            _ => return Err("Unsupported mapper".into()),
+        };
 
         Ok(Self {
             v_prg_memory: prg_memory,
