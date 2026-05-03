@@ -398,9 +398,7 @@ impl<C: CartridgeInterface> Olc2c02<C> {
         //////////////////////////
         if render_scanline && (self.cycle == 257 && self.scanline < 240) {
             // Clear sprite scanline array
-            for addr in 0u8..32 {
-                self.sprite_scanline.write(addr, 0xFF);
-            }
+            self.sprite_scanline = SpriteScanline::default();
 
             self.sprite_count = 0; 
 
@@ -572,110 +570,111 @@ impl<C: CartridgeInterface> Olc2c02<C> {
 
         // Compose foreground and background information 
 
-        // Background 
-        let mut bg_pixel:   u8 = 0x00; 
-        let mut bg_palette: u8 = 0x00;
+        if self.scanline < 240 && self.cycle >= 1 && self.cycle <= 256 {
+
+            // Background 
+            let mut bg_pixel:   u8 = 0x00; 
+            let mut bg_palette: u8 = 0x00;
 
 
-        if self.mask & MASK_RENDER_BACKGROUND != 0 {
-            let bit_mux: u16 = 0x8000 >> self.fine_x;
+            if self.mask & MASK_RENDER_BACKGROUND != 0 {
+                let bit_mux: u16 = 0x8000 >> self.fine_x;
 
 
-            // Select Plane pixels by extracting from the shifter 
-            // at the required location. 
-            let p0_pixel = ((self.bg_shifter_pattern_lo & bit_mux) > 0) as u8;
-            let p1_pixel = ((self.bg_shifter_pattern_hi & bit_mux) > 0) as u8;
+                // Select Plane pixels by extracting from the shifter 
+                // at the required location. 
+                let p0_pixel = ((self.bg_shifter_pattern_lo & bit_mux) > 0) as u8;
+                let p1_pixel = ((self.bg_shifter_pattern_hi & bit_mux) > 0) as u8;
 
-            // Combine to form pixel index
-            bg_pixel         = (p1_pixel << 1) | p0_pixel;
+                // Combine to form pixel index
+                bg_pixel         = (p1_pixel << 1) | p0_pixel;
 
-            // Get palette
-            let bg_pal0  = ((self.bg_shifter_attrib_lo & bit_mux) > 0) as u8;
-            let bg_pal1  = ((self.bg_shifter_attrib_hi & bit_mux) > 0) as u8;
-            bg_palette       = (bg_pal1 << 1) | bg_pal0;
+                // Get palette
+                let bg_pal0  = ((self.bg_shifter_attrib_lo & bit_mux) > 0) as u8;
+                let bg_pal1  = ((self.bg_shifter_attrib_hi & bit_mux) > 0) as u8;
+                bg_palette       = (bg_pal1 << 1) | bg_pal0;
 
-        }
-        
+            }
+            
 
-        // Foreground 
-        let mut fg_pixel:    u8 = 0x00;
-        let mut fg_palette:  u8 = 0x00;
-        let mut fg_priority: bool = false;
+            // Foreground 
+            let mut fg_pixel:    u8 = 0x00;
+            let mut fg_palette:  u8 = 0x00;
+            let mut fg_priority: bool = false;
 
-        if self.mask & MASK_RENDER_SPRITES != 0  {
-            self.b_sp_0_being_rendered = false; 
+            if self.mask & MASK_RENDER_SPRITES != 0  {
+                self.b_sp_0_being_rendered = false; 
 
-            for i in 0u8..self.sprite_count {
-                let sprite = self.sprite_scanline.sprites[i as usize];
+                for i in 0u8..self.sprite_count {
+                    let sprite = self.sprite_scanline.sprites[i as usize];
 
-                // Scanline has collided with the sprite
-                if sprite.x == 0 {
+                    // Scanline has collided with the sprite
+                    if sprite.x == 0 {
 
-                    let fg_pixel_lo: u8 = ((self.sp_shifter_pattern_lo[i as usize] & 0x80) > 0) as u8;
-                    let fg_pixel_hi: u8 = ((self.sp_shifter_pattern_hi[i as usize] & 0x80) > 0) as u8;
-                    fg_pixel = (fg_pixel_hi << 1) | fg_pixel_lo;
+                        let fg_pixel_lo: u8 = ((self.sp_shifter_pattern_lo[i as usize] & 0x80) > 0) as u8;
+                        let fg_pixel_hi: u8 = ((self.sp_shifter_pattern_hi[i as usize] & 0x80) > 0) as u8;
+                        fg_pixel = (fg_pixel_hi << 1) | fg_pixel_lo;
 
-                    
-                    fg_palette  = (sprite.attribute & 0x03) + 0x04;
-                    fg_priority = (sprite.attribute & 0x20) == 0;
+                        
+                        fg_palette  = (sprite.attribute & 0x03) + 0x04;
+                        fg_priority = (sprite.attribute & 0x20) == 0;
 
-                    if fg_pixel != 0 {
-                        if i == 0 {
-                            self.b_sp_0_being_rendered = true; 
+                        if fg_pixel != 0 {
+                            if i == 0 {
+                                self.b_sp_0_being_rendered = true; 
+                            }
+
+                            break;
                         }
-
-                        break;
                     }
-                }
-            } // Loop over sprites that we break out of
-        } // Check whether sprites should be rendered
+                } // Loop over sprites that we break out of
+            } // Check whether sprites should be rendered
 
 
-        // Combine background and foreground pixel
-        let mut pixel: u8 = 0x00; 
-        let mut palette: u8 = 0x00; 
+            // Combine background and foreground pixel
+            let mut pixel: u8 = 0x00; 
+            let mut palette: u8 = 0x00; 
 
-        if bg_pixel == 0 && fg_pixel == 0 {
-            pixel   = 0x00; 
-            palette = 0x00; 
-        } else if bg_pixel == 0 && fg_pixel > 0 {
-            pixel   = fg_pixel; 
-            palette = fg_palette
-        } else if bg_pixel > 0 && fg_pixel == 0 {
-            pixel   = bg_pixel; 
-            palette = bg_palette; 
-        } else if bg_pixel > 0 && fg_pixel > 0 {
-            if fg_priority {
+            if bg_pixel == 0 && fg_pixel == 0 {
+                pixel   = 0x00; 
+                palette = 0x00; 
+            } else if bg_pixel == 0 && fg_pixel > 0 {
                 pixel   = fg_pixel; 
-                palette = fg_palette; 
-            } else {
+                palette = fg_palette
+            } else if bg_pixel > 0 && fg_pixel == 0 {
                 pixel   = bg_pixel; 
                 palette = bg_palette; 
-            }
+            } else if bg_pixel > 0 && fg_pixel > 0 {
+                if fg_priority {
+                    pixel   = fg_pixel; 
+                    palette = fg_palette; 
+                } else {
+                    pixel   = bg_pixel; 
+                    palette = bg_palette; 
+                }
 
-            if self.b_sp_0_being_rendered && self.b_sp_0_hit_possible {
-                if ((self.mask & MASK_RENDER_BACKGROUND) != 0) && ((self.mask & MASK_RENDER_SPRITES) != 0) {
-                    let left_edge_enabled =
-                        (self.mask & MASK_RENDER_BACKGROUND_LEFT) != 0 &&
-                        (self.mask & MASK_RENDER_SPRITES_LEFT) != 0;
+                if self.b_sp_0_being_rendered && self.b_sp_0_hit_possible {
+                    if ((self.mask & MASK_RENDER_BACKGROUND) != 0) && ((self.mask & MASK_RENDER_SPRITES) != 0) {
+                        let left_edge_enabled =
+                            (self.mask & MASK_RENDER_BACKGROUND_LEFT) != 0 &&
+                            (self.mask & MASK_RENDER_SPRITES_LEFT) != 0;
 
-                    if !left_edge_enabled {
-                        if self.cycle >= 9 && self.cycle < 258 {
-                            self.status |= STATUS_SPRITE_ZERO_HIT;
-                        }
-                    } else {
-                        if self.cycle >= 1 && self.cycle < 258 {
-                            self.status |= STATUS_SPRITE_ZERO_HIT;
+                        if !left_edge_enabled {
+                            if self.cycle >= 9 && self.cycle < 258 {
+                                self.status |= STATUS_SPRITE_ZERO_HIT;
+                            }
+                        } else {
+                            if self.cycle >= 1 && self.cycle < 258 {
+                                self.status |= STATUS_SPRITE_ZERO_HIT;
+                            }
                         }
                     }
                 }
             }
-        }
 
 
-        let colour = self.get_colour_from_palette_ram(palette, pixel, cartridge).unwrap_or(0);
+            let colour = self.get_colour_from_palette_ram(palette, pixel, cartridge).unwrap_or(0);
 
-        if self.scanline < 240 && self.cycle >= 1 && self.cycle <= 256 {
             self.set_pixel((self.cycle - 1) as usize, self.scanline as usize, colour);
         }
 
@@ -940,7 +939,7 @@ impl<C: CartridgeInterface> Olc2c02<C> {
                         // I will run both and report back
                         // let pixel = (tile_lsb & 0x01) + (tile_msb & 0x01); 
                         // let pixel = (tile_lsb & 0x01) | ((tile_msb & 0x01) << 1);
-                        // Turns that we need the addition to get the right output
+                        // Turns out that we need the addition to get the right output
 
                         let pixel = (tile_lsb & 0x01) + (tile_msb & 0x01); 
                         tile_lsb >>= 1;
