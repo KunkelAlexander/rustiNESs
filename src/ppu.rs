@@ -162,20 +162,20 @@ pub struct Olc2c02<C: CartridgeInterface> {
 
 
 // masks for self.status
-const STATUS_UNUSED:                u8 = 0b0001_1111;
+//const STATUS_UNUSED:                u8 = 0b0001_1111;
 const STATUS_SPRITE_OVERFLOW:       u8 = 1 << 5;
 const STATUS_SPRITE_ZERO_HIT:       u8 = 1 << 6;
 const STATUS_VERTICAL_BLANK:        u8 = 1 << 7;
 
 // masks for self.mask
-const MASK_GRAYSCALE:               u8 = 1 << 0;
+//const MASK_GRAYSCALE:               u8 = 1 << 0;
 const MASK_RENDER_BACKGROUND_LEFT:  u8 = 1 << 1;
 const MASK_RENDER_SPRITES_LEFT:     u8 = 1 << 2;
 const MASK_RENDER_BACKGROUND:       u8 = 1 << 3;
 const MASK_RENDER_SPRITES:          u8 = 1 << 4;
-const MASK_ENHANCE_RED:             u8 = 1 << 5;
-const MASK_ENHANCE_GREEN:           u8 = 1 << 6;
-const MASK_ENHANCE_BLUE:            u8 = 1 << 7;
+//const MASK_ENHANCE_RED:             u8 = 1 << 5;
+//const MASK_ENHANCE_GREEN:           u8 = 1 << 6;
+//const MASK_ENHANCE_BLUE:            u8 = 1 << 7;
 
 // masks for self.control
 const CTRL_NAMETABLE_X:             u8 = 1 << 0;
@@ -184,7 +184,7 @@ const CTRL_INCREMENT_MODE:          u8 = 1 << 2;
 const CTRL_PATTERN_SPRITE:          u8 = 1 << 3;
 const CTRL_PATTERN_BACKGROUND:      u8 = 1 << 4;
 const CTRL_SPRITE_SIZE:             u8 = 1 << 5;
-const CTRL_SLAVE_MODE:              u8 = 1 << 6;
+//const CTRL_SLAVE_MODE:              u8 = 1 << 6;
 const CTRL_ENABLE_NMI:              u8 = 1 << 7;
 
 
