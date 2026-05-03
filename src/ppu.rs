@@ -1,5 +1,7 @@
 use crate::{interfaces::{CartridgeInterface, PpuInterface}};
 
+use std::marker::PhantomData;
+
 pub const SCREEN_W: usize = 256;
 pub const SCREEN_H: usize = 240;
 
@@ -104,7 +106,7 @@ impl<const N: usize> SpriteArray<N> {
 pub type OAM = SpriteArray<64>;
 pub type SpriteScanline = SpriteArray<8>; 
 
-pub struct Olc2c02 {
+pub struct Olc2c02<C: CartridgeInterface> {
     screen:                [u8; SCREEN_H*SCREEN_W],   // Frame buffer
     table_name:            [u8; 2*1024],              // 2 KB of physical VRAM for the name tables
     table_palette:         [u8; 32],                  // 32 Bytes physical VRAM for the palletes
@@ -152,36 +154,41 @@ pub struct Olc2c02 {
     // This is important for status bars - a static bar is rendered up to a given scanline and then the game is rendered normally below
     // The sprite 0 tells us where to start normal rendering
     b_sp_0_being_rendered: bool,
-    b_sp_0_hit_possible:   bool
+    b_sp_0_hit_possible:   bool,
+
+    
+    _cartridge: PhantomData<C>, 
 }
 
-impl Olc2c02 {
-    // masks for self.status
-    pub const STATUS_UNUSED:                u8 = 0b0001_1111;
-    pub const STATUS_SPRITE_OVERFLOW:       u8 = 1 << 5;
-    pub const STATUS_SPRITE_ZERO_HIT:       u8 = 1 << 6;
-    pub const STATUS_VERTICAL_BLANK:        u8 = 1 << 7;
 
-    // masks for self.mask
-    pub const MASK_GRAYSCALE:               u8 = 1 << 0;
-    pub const MASK_RENDER_BACKGROUND_LEFT:  u8 = 1 << 1;
-    pub const MASK_RENDER_SPRITES_LEFT:     u8 = 1 << 2;
-    pub const MASK_RENDER_BACKGROUND:       u8 = 1 << 3;
-    pub const MASK_RENDER_SPRITES:          u8 = 1 << 4;
-    pub const MASK_ENHANCE_RED:             u8 = 1 << 5;
-    pub const MASK_ENHANCE_GREEN:           u8 = 1 << 6;
-    pub const MASK_ENHANCE_BLUE:            u8 = 1 << 7;
+// masks for self.status
+const STATUS_UNUSED:                u8 = 0b0001_1111;
+const STATUS_SPRITE_OVERFLOW:       u8 = 1 << 5;
+const STATUS_SPRITE_ZERO_HIT:       u8 = 1 << 6;
+const STATUS_VERTICAL_BLANK:        u8 = 1 << 7;
 
-    // masks for self.control
-    pub const CTRL_NAMETABLE_X:             u8 = 1 << 0;
-    pub const CTRL_NAMETABLE_Y:             u8 = 1 << 1;
-    pub const CTRL_INCREMENT_MODE:          u8 = 1 << 2;
-    pub const CTRL_PATTERN_SPRITE:          u8 = 1 << 3;
-    pub const CTRL_PATTERN_BACKGROUND:      u8 = 1 << 4;
-    pub const CTRL_SPRITE_SIZE:             u8 = 1 << 5;
-    pub const CTRL_SLAVE_MODE:              u8 = 1 << 6;
-    pub const CTRL_ENABLE_NMI:              u8 = 1 << 7;
+// masks for self.mask
+const MASK_GRAYSCALE:               u8 = 1 << 0;
+const MASK_RENDER_BACKGROUND_LEFT:  u8 = 1 << 1;
+const MASK_RENDER_SPRITES_LEFT:     u8 = 1 << 2;
+const MASK_RENDER_BACKGROUND:       u8 = 1 << 3;
+const MASK_RENDER_SPRITES:          u8 = 1 << 4;
+const MASK_ENHANCE_RED:             u8 = 1 << 5;
+const MASK_ENHANCE_GREEN:           u8 = 1 << 6;
+const MASK_ENHANCE_BLUE:            u8 = 1 << 7;
 
+// masks for self.control
+const CTRL_NAMETABLE_X:             u8 = 1 << 0;
+const CTRL_NAMETABLE_Y:             u8 = 1 << 1;
+const CTRL_INCREMENT_MODE:          u8 = 1 << 2;
+const CTRL_PATTERN_SPRITE:          u8 = 1 << 3;
+const CTRL_PATTERN_BACKGROUND:      u8 = 1 << 4;
+const CTRL_SPRITE_SIZE:             u8 = 1 << 5;
+const CTRL_SLAVE_MODE:              u8 = 1 << 6;
+const CTRL_ENABLE_NMI:              u8 = 1 << 7;
+
+
+impl<C: CartridgeInterface> Olc2c02<C> {
 
 
     pub fn new() -> Self {
@@ -219,6 +226,9 @@ impl Olc2c02 {
             sp_shifter_pattern_lo:  [0x0000; 8],
             b_sp_0_being_rendered:   false,
             b_sp_0_hit_possible:     false,
+
+            
+            _cartridge:             PhantomData,
         }
     }
 
@@ -230,7 +240,7 @@ impl Olc2c02 {
 
 	// Increment the background tile "pointer" one tile/column horizontally
     fn increment_scroll_x(&mut self) {
-        if (self.mask & Olc2c02::MASK_RENDER_BACKGROUND != 0) || (self.mask & Olc2c02::MASK_RENDER_SPRITES != 0) {
+        if (self.mask & MASK_RENDER_BACKGROUND != 0) || (self.mask & MASK_RENDER_SPRITES != 0) {
             if self.vram_addr.coarse_x == 31 {
                 self.vram_addr.coarse_x     = 0;
                 self.vram_addr.nametable_x ^= 1;
@@ -242,7 +252,7 @@ impl Olc2c02 {
 
 	// Increment the background tile "pointer" one scanline vertically
     fn increment_scroll_y(&mut self) {
-        if (self.mask & Olc2c02::MASK_RENDER_BACKGROUND != 0) || (self.mask & Olc2c02::MASK_RENDER_SPRITES != 0) {
+        if (self.mask & MASK_RENDER_BACKGROUND != 0) || (self.mask & MASK_RENDER_SPRITES != 0) {
             if self.vram_addr.fine_y < 7 {
                 self.vram_addr.fine_y += 1;
             } else {
@@ -262,7 +272,7 @@ impl Olc2c02 {
 
     // Transfer temporarily stored horizontal nametable access information into the main pointer
     fn transfer_address_x(&mut self) {
-        if (self.mask & Olc2c02::MASK_RENDER_BACKGROUND != 0) || (self.mask & Olc2c02::MASK_RENDER_SPRITES != 0) {
+        if (self.mask & MASK_RENDER_BACKGROUND != 0) || (self.mask & MASK_RENDER_SPRITES != 0) {
             self.vram_addr.nametable_x = self.tram_addr.nametable_x;
             self.vram_addr.coarse_x    = self.tram_addr.coarse_x;
         }
@@ -270,7 +280,7 @@ impl Olc2c02 {
 
     // Transfer temporarily stored vertical nametable access information into the main pointer
     fn transfer_address_y(&mut self) {
-        if (self.mask & Olc2c02::MASK_RENDER_BACKGROUND != 0) || (self.mask & Olc2c02::MASK_RENDER_SPRITES != 0) {
+        if (self.mask & MASK_RENDER_BACKGROUND != 0) || (self.mask & MASK_RENDER_SPRITES != 0) {
             self.vram_addr.nametable_y = self.tram_addr.nametable_y;
             self.vram_addr.coarse_y    = self.tram_addr.coarse_y;
             self.vram_addr.fine_y      = self.tram_addr.fine_y;
@@ -288,7 +298,7 @@ impl Olc2c02 {
     
     // Every caycle the shifters shift their contents by 1 bit because the output progresses by 1 pixel
     fn update_shifters(&mut self) {
-        if self.mask & Olc2c02::MASK_RENDER_BACKGROUND != 0 {
+        if self.mask & MASK_RENDER_BACKGROUND != 0 {
             self.bg_shifter_pattern_lo <<= 1;
             self.bg_shifter_pattern_hi <<= 1;
             self.bg_shifter_attrib_lo  <<= 1;
@@ -298,7 +308,7 @@ impl Olc2c02 {
         // We want to detect when the scanline collides with the sprite
         // To do so, we decrement the sprite's x position every cycle 
         // One x = 0, we know that the scanline has reached it and that it should be rendered
-        if (self.mask & Olc2c02::MASK_RENDER_SPRITES != 0) && self.cycle >= 1 && self.cycle < 258 {
+        if (self.mask & MASK_RENDER_SPRITES != 0) && self.cycle >= 1 && self.cycle < 258 {
             for i in 0u8..self.sprite_count {
                 let sprite = &mut self.sprite_scanline.sprites[i as usize]; 
                 if sprite.x > 0 {
@@ -318,7 +328,7 @@ impl Olc2c02 {
     // Vblank: 241...260
     // Pre-render: 261 
     // Javidx9 uses -1 for pre-render since he uses a signed integer
-    pub fn clock(&mut self, cartridge: &mut dyn CartridgeInterface)  {
+    pub fn clock(&mut self, cartridge: &mut C)  {
 
         let render_scanline = self.scanline < 240 || self.scanline == 261;
 
@@ -345,7 +355,7 @@ impl Olc2c02 {
                     self.bg_next_tile_attrib &= 0x03;
                 }
                 4 => {
-                    let addr = (((((self.control & Olc2c02::CTRL_PATTERN_BACKGROUND) as u16) >> 4) << 12) as u16)
+                    let addr = (((((self.control & CTRL_PATTERN_BACKGROUND) as u16) >> 4) << 12) as u16)
                                   + ((self.bg_next_tile_id as u16) << 4) 
                                   + (self.vram_addr.fine_y as u16);
 
@@ -353,7 +363,7 @@ impl Olc2c02 {
                 }
 
                 6 => {
-                    let addr = (((((self.control & Olc2c02::CTRL_PATTERN_BACKGROUND) as u16) >> 4) << 12) as u16)
+                    let addr = (((((self.control & CTRL_PATTERN_BACKGROUND) as u16) >> 4) << 12) as u16)
                                   + ((self.bg_next_tile_id as u16) << 4) 
                                   + (self.vram_addr.fine_y as u16)
                                   + 8;
@@ -400,9 +410,9 @@ impl Olc2c02 {
 				self.sp_shifter_pattern_hi[i] = 0;
 			}
 
-            self.status &= !Olc2c02::STATUS_SPRITE_OVERFLOW;
+            self.status &= !STATUS_SPRITE_OVERFLOW;
 
-            let sprite_size: i16 = if (self.control & Olc2c02::CTRL_SPRITE_SIZE) != 0 {16} else {8};
+            let sprite_size: i16 = if (self.control & CTRL_SPRITE_SIZE) != 0 {16} else {8};
 
             self.b_sp_0_hit_possible = false; 
 
@@ -420,7 +430,7 @@ impl Olc2c02 {
                         self.sprite_scanline.sprites[self.sprite_count as usize] = self.oam.sprites[n_oam_entry as usize];
                         self.sprite_count += 1;
                     } else {
-                        self.status |=  Olc2c02::STATUS_SPRITE_OVERFLOW;
+                        self.status |=  STATUS_SPRITE_OVERFLOW;
                         break;
                         
                     }
@@ -440,10 +450,10 @@ impl Olc2c02 {
 
 
                 // 8x8 sprite mode
-                if (self.control & Olc2c02::CTRL_SPRITE_SIZE) == 0 {
+                if (self.control & CTRL_SPRITE_SIZE) == 0 {
                     // These 3 indices index into a 2D memory structure
                     // This is either 0k or 4k offset on the CPU bus
-                    let offset1 = (((self.control & Olc2c02::CTRL_PATTERN_SPRITE) != 0) as u16) << 12; 
+                    let offset1 = (((self.control & CTRL_PATTERN_SPRITE) != 0) as u16) << 12; 
                     // << 4 = * 16 = each tile is 16 bytes in size 
                     let offset2 = (sprite.id as u16) << 4;        
                     // Which row of the tile are we currently in - Unsigned here because it should always be positive                                      
@@ -536,8 +546,8 @@ impl Olc2c02 {
         
 
         if self.scanline == 241 && self.cycle == 1 {
-            self.status |= Olc2c02::STATUS_VERTICAL_BLANK;
-            if self.control & Olc2c02::CTRL_ENABLE_NMI != 0 {
+            self.status |= STATUS_VERTICAL_BLANK;
+            if self.control & CTRL_ENABLE_NMI != 0 {
                 self.nmi = true;
             }
 
@@ -550,9 +560,9 @@ impl Olc2c02 {
 
         // Effectively start of new frame
         if self.scanline == 261 && self.cycle == 1 {
-            self.status &= !Olc2c02::STATUS_VERTICAL_BLANK;
-            self.status &= !Olc2c02::STATUS_SPRITE_OVERFLOW;
-            self.status &= !Olc2c02::STATUS_SPRITE_ZERO_HIT;
+            self.status &= !STATUS_VERTICAL_BLANK;
+            self.status &= !STATUS_SPRITE_OVERFLOW;
+            self.status &= !STATUS_SPRITE_ZERO_HIT;
 
             for i in 0u8..8 {
                 self.sp_shifter_pattern_hi[i as usize] = 0;
@@ -567,7 +577,7 @@ impl Olc2c02 {
         let mut bg_palette: u8 = 0x00;
 
 
-        if self.mask & Olc2c02::MASK_RENDER_BACKGROUND != 0 {
+        if self.mask & MASK_RENDER_BACKGROUND != 0 {
             let bit_mux: u16 = 0x8000 >> self.fine_x;
 
 
@@ -592,7 +602,7 @@ impl Olc2c02 {
         let mut fg_palette:  u8 = 0x00;
         let mut fg_priority: bool = false;
 
-        if self.mask & Olc2c02::MASK_RENDER_SPRITES != 0  {
+        if self.mask & MASK_RENDER_SPRITES != 0  {
             self.b_sp_0_being_rendered = false; 
 
             for i in 0u8..self.sprite_count {
@@ -644,18 +654,18 @@ impl Olc2c02 {
             }
 
             if self.b_sp_0_being_rendered && self.b_sp_0_hit_possible {
-                if ((self.mask & Olc2c02::MASK_RENDER_BACKGROUND) != 0) && ((self.mask & Olc2c02::MASK_RENDER_SPRITES) != 0) {
+                if ((self.mask & MASK_RENDER_BACKGROUND) != 0) && ((self.mask & MASK_RENDER_SPRITES) != 0) {
                     let left_edge_enabled =
-                        (self.mask & Olc2c02::MASK_RENDER_BACKGROUND_LEFT) != 0 &&
-                        (self.mask & Olc2c02::MASK_RENDER_SPRITES_LEFT) != 0;
+                        (self.mask & MASK_RENDER_BACKGROUND_LEFT) != 0 &&
+                        (self.mask & MASK_RENDER_SPRITES_LEFT) != 0;
 
                     if !left_edge_enabled {
                         if self.cycle >= 9 && self.cycle < 258 {
-                            self.status |= Olc2c02::STATUS_SPRITE_ZERO_HIT;
+                            self.status |= STATUS_SPRITE_ZERO_HIT;
                         }
                     } else {
                         if self.cycle >= 1 && self.cycle < 258 {
-                            self.status |= Olc2c02::STATUS_SPRITE_ZERO_HIT;
+                            self.status |= STATUS_SPRITE_ZERO_HIT;
                         }
                     }
                 }
@@ -691,7 +701,7 @@ impl Olc2c02 {
 
     // Depending on the increment mode flag, we either move horizontally (1 tile) or vertically (skip 32 tiles horizontally)
     fn ppu_addr_increment(&self) -> u16 {
-        if (self.control & Olc2c02::CTRL_INCREMENT_MODE) != 0 {
+        if (self.control & CTRL_INCREMENT_MODE) != 0 {
             32
         } else {
             1
@@ -730,8 +740,8 @@ impl Olc2c02 {
 }
 
 
-impl PpuInterface for Olc2c02 {
-    fn read_cpu(&mut self, addr: u16, _read_only: bool, cartridge: &mut dyn CartridgeInterface) -> u8 {
+impl<C: CartridgeInterface> PpuInterface<C> for Olc2c02<C> {
+    fn read_cpu(&mut self, addr: u16, _read_only: bool, cartridge: &mut C) -> u8 {
     
         let data = match addr {
             0x0000 => 0x00, // Control
@@ -739,7 +749,7 @@ impl PpuInterface for Olc2c02 {
             // Status
             0x0002 => {
                 let temp = (self.status & 0xE0) | (self.ppu_data_buffer & 0x1F);
-                self.status &= !Olc2c02::STATUS_VERTICAL_BLANK;
+                self.status &= !STATUS_VERTICAL_BLANK;
                 self.address_latch = 0; 
                 temp
             }, 
@@ -771,14 +781,14 @@ impl PpuInterface for Olc2c02 {
         data
     }
 
-    fn write_cpu(&mut self, addr: u16, data: u8, cartridge: &mut dyn CartridgeInterface)  {
+    fn write_cpu(&mut self, addr: u16, data: u8, cartridge: &mut C)  {
         match addr {
             // Control
             0x0000 => {
                 self.control = data;
                 // Set tram_addr.nametable_x/y = control.nametable_x/y
-                self.tram_addr.nametable_x = ((data & Olc2c02::CTRL_NAMETABLE_X) != 0) as u8;
-                self.tram_addr.nametable_y = ((data & Olc2c02::CTRL_NAMETABLE_Y) != 0) as u8;
+                self.tram_addr.nametable_x = ((data & CTRL_NAMETABLE_X) != 0) as u8;
+                self.tram_addr.nametable_y = ((data & CTRL_NAMETABLE_Y) != 0) as u8;
             }, 
             // Mask
             0x0001 => {
@@ -830,7 +840,7 @@ impl PpuInterface for Olc2c02 {
         };
     }
 
-    fn read_ppu(&self, addr: u16, cartridge: &dyn CartridgeInterface) -> Option<u8> {
+    fn read_ppu(&self, addr: u16, cartridge: &C) -> Option<u8> {
         let mut addr = addr & 0x3FFF;
 
 
@@ -864,7 +874,7 @@ impl PpuInterface for Olc2c02 {
 
     }
 
-    fn write_ppu(&mut self, addr: u16, data: u8, cartridge: &mut dyn CartridgeInterface) {
+    fn write_ppu(&mut self, addr: u16, data: u8, cartridge: &mut C) {
         let mut addr = addr & 0x3FFF;
 
 
@@ -895,13 +905,13 @@ impl PpuInterface for Olc2c02 {
 
 }
 
-impl Olc2c02 {
+impl<C: CartridgeInterface> Olc2c02<C> {
 
     pub fn get_name_table(&self) -> Vec<u8> {
         self.table_name[..1024].to_vec()
     }
 
-    pub fn get_pattern_table(&self, i: u8, palette: u8, cartridge: &dyn CartridgeInterface) -> Vec<u8> {
+    pub fn get_pattern_table(&self, i: u8, palette: u8, cartridge: &C) -> Vec<u8> {
         
         let mut sprite_pattern_table = [0u8; 128*128];
 
@@ -955,7 +965,7 @@ impl Olc2c02 {
     
 	// This is a convenience function that takes a specified palette and pixel
 	// index and returns the appropriate screen colour.
-    fn get_colour_from_palette_ram(&self, palette: u8, pixel: u8, cartridge: &dyn CartridgeInterface) -> Option<u8> {
+    fn get_colour_from_palette_ram(&self, palette: u8, pixel: u8, cartridge: &C) -> Option<u8> {
         let addr = 0x3F00u16 + ((palette as u16) << 2) + pixel as u16;
         self.read_ppu(addr, cartridge)
     }

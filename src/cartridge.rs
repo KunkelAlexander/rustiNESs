@@ -23,18 +23,6 @@ struct INesHeader {
     //tv_system2     : u8
 }
 
-//Represent NES without cartridge via empty cartridge
-pub struct EmptyCartridge;
-
-impl CartridgeInterface for EmptyCartridge {
-    fn read_cpu(&mut self, _addr: u16) -> Option<u8>             {None}
-    fn write_cpu(&mut self, _addr: u16, _data: u8) -> Option<()>  {None}
-    fn read_ppu(& self, _addr: u16) -> Option<u8>                {None}
-    fn write_ppu(&mut self, _addr: u16, _data: u8) -> Option<()>  {None}
-    fn map_nametable_addr(&self, _addr: u16) -> u16              {0}
-    fn reset(&mut self)                                         {}
-}
-
 pub struct Cartridge {
     v_prg_memory: Vec<u8>,
     v_chr_memory: Vec<u8>,

@@ -3,11 +3,11 @@ use crate::interfaces::BusInterface;
 use crate::bus::Bus;
 use crate::cpu::Olc6502;
 use crate::ppu::Olc2c02;
-use crate::cartridge::{EmptyCartridge, Cartridge};
+use crate::cartridge::Cartridge;
 
 pub struct Nes {
-    cpu:                  Olc6502::<Bus>,
-    bus:                  Bus,
+    cpu: Olc6502<Bus<Cartridge>>,
+    bus: Bus<Cartridge>,
     system_clock_counter: u32,
     audio_buffer: Vec<f32>,
     sine_phase:   f64,
@@ -16,8 +16,8 @@ pub struct Nes {
 impl Nes {
     pub fn new() -> Self {
         Self {
-            cpu:                  Olc6502::<Bus>::new(),
-            bus:                  Bus::new(Box::new(EmptyCartridge)),
+            cpu:                  Olc6502::new(),
+            bus:                  Bus::new(),
             system_clock_counter: 0,
             audio_buffer: Vec::new(),
             sine_phase:   0.0,
@@ -102,7 +102,7 @@ impl Nes {
 
     pub fn insert_cartridge(&mut self, cartridge_data: &[u8]) -> Result<(), String> {
         let cart = Cartridge::from_bytes(cartridge_data)?;
-        self.bus.insert_cartridge(Box::new(cart));
+        self.bus.insert_cartridge(cart);
         Ok(())
     }
 
