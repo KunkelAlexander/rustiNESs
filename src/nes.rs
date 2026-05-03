@@ -6,7 +6,7 @@ use crate::ppu::Olc2c02;
 use crate::cartridge::{EmptyCartridge, Cartridge};
 
 pub struct Nes {
-    cpu:                  Olc6502,
+    cpu:                  Olc6502::<Bus>,
     bus:                  Bus,
     system_clock_counter: u32,
     audio_buffer: Vec<f32>,
@@ -16,7 +16,7 @@ pub struct Nes {
 impl Nes {
     pub fn new() -> Self {
         Self {
-            cpu:                  Olc6502::new(),
+            cpu:                  Olc6502::<Bus>::new(),
             bus:                  Bus::new(Box::new(EmptyCartridge)),
             system_clock_counter: 0,
             audio_buffer: Vec::new(),

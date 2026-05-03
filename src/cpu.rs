@@ -1,80 +1,6 @@
-/*
-	olc6502 - An emulation of the 6502/2A03 processor
-	"Thanks Dad for believing computers were gonna be a big deal..." - javidx9
-
-	License (OLC-3)
-	~~~~~~~~~~~~~~~
-
-	Copyright 2018-2019 OneLoneCoder.com
-
-	Redistribution and use in source and binary forms, with or without
-	modification, are permitted provided that the following conditions
-	are met:
-
-	1. Redistributions or derivations of source code must retain the above
-	copyright notice, this list of conditions and the following disclaimer.
-
-	2. Redistributions or derivative works in binary form must reproduce
-	the above copyright notice. This list of conditions and the following
-	disclaimer must be reproduced in the documentation and/or other
-	materials provided with the distribution.
-
-	3. Neither the name of the copyright holder nor the names of its
-	contributors may be used to endorse or promote products derived
-	from this software without specific prior written permission.
-
-	THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-	"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-	LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-	A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-	HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-	SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-	LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-	DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-	THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-	(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-	Background
-	~~~~~~~~~~
-	I love this microprocessor. It was at the heart of two of my favourite
-	machines, the BBC Micro, and the Nintendo Entertainment System, as well
-	as countless others in that era. I learnt to program on the Model B, and
-	I learnt to love games on the NES, so in many ways, this processor is
-	why I am the way I am today.
-
-	In February 2019, I decided to undertake a selfish personal project and
-	build a NES emulator. Ive always wanted to, and as such I've avoided
-	looking at source code for such things. This made making this a real
-	personal challenge. I know its been done countless times, and very likely
-	in far more clever and accurate ways than mine, but I'm proud of this.
-
-	Datasheet: http://archive.6502.org/datasheets/rockwell_r650x_r651x.pdf
-
-	Files: olc6502.h, olc6502.cpp
-
-	Relevant Video: https://www.youtube.com/watch?v=8XmxKPJDGU0
-
-	Links
-	~~~~~
-	YouTube:	https://www.youtube.com/javidx9
-				https://www.youtube.com/javidx9extra
-	Discord:	https://discord.gg/WhwHUMV
-	Twitter:	https://www.twitter.com/javidx9
-	Twitch:		https://www.twitch.tv/javidx9
-	GitHub:		https://www.github.com/onelonecoder
-	Patreon:	https://www.patreon.com/javidx9
-	Homepage:	https://www.onelonecoder.com
-
-	Author
-	~~~~~~
-	David Barr, aka javidx9, ©OneLoneCoder 2019
-
-    Translated into Rust by Alexander Kunkel, 2026
-    No copy-paste from LLMs or Copilot for this project (except for the opcode lookup table) as I realised I understand what I am doing less when I rely on their code too much :) 
-
-*/
 use crate::interfaces::BusInterface;
+
+use std::marker::PhantomData;
 
 // Note that https://www.nesdev.org/wiki/Instruction_reference refers to the U bit as 1 
 // when they write something like the bit order is NV1BDIZC (high to low). 
@@ -419,8 +345,7 @@ const fn build_lookup() -> [Instruction; 256] {
 
 pub static LOOKUP: [Instruction; 256] = build_lookup();
 
-pub struct Olc6502 {
-    // registers
+pub struct Olc6502<C: BusInterface> {    // registers
     a      : u8,  // Accumulator register
     x      : u8,  // X register
     y      : u8,  // Y register
@@ -436,13 +361,19 @@ pub struct Olc6502 {
     cycles   : u8,
 
     // debugging
-    trace_enabled : bool
+    trace_enabled : bool,
+
+    //what is phantomData?
+    // PhantomData is a way to tell the compiler "this type parameter is logically used here, 
+    // even though no field actually stores it.
+    // We need it for the generic to compile
+    _bus: PhantomData<C>, 
 }
 
 
 
 
-impl Olc6502 {
+impl<C: BusInterface> Olc6502<C> {
     pub fn new() -> Self {
         Self {
             // init registers etc
@@ -459,11 +390,13 @@ impl Olc6502 {
             opcode:   0,
             cycles:   0,
 
-            trace_enabled: false
+            trace_enabled: false, 
+
+            _bus: PhantomData,
         }
     }
 
-    pub fn read(&self, bus: &mut dyn BusInterface, addr: u16) -> u8 {
+    pub fn read(&self, bus: &mut C, addr: u16) -> u8 {
         
         // In normal operation "read only" is set to false. This may seem odd. Some
         // devices on the bus may change state when they are read from, and this 
@@ -475,7 +408,7 @@ impl Olc6502 {
     }
 
     // Writes a byte to the bus at the specified address
-    pub fn write(&self, bus: &mut dyn BusInterface, addr: u16, data: u8) {
+    pub fn write(&self, bus: &mut C, addr: u16, data: u8) {
         bus.write(addr, data)
     }
 
@@ -484,7 +417,7 @@ impl Olc6502 {
     // 2. Look up instruction
     // 3. Check the two bytes following the instruction
     // 4. Print pc location, length of instruction, name, arguments of instruction and CPU state for debuggig
-    pub fn trace(&self, bus: &mut dyn BusInterface) -> String {
+    pub fn trace(&self, bus: &mut C) -> String {
         let opcode        = self.read(bus, self.pc);
         let inst = LOOKUP[opcode as usize];
 
@@ -561,7 +494,7 @@ impl Olc6502 {
     // allows the programmer to jump to a known and programmable location in the
     // memory to start executing from. Typically the programmer would set the value
     // at location 0xFFFC at compile time.
-    pub fn reset(&mut self, bus: &mut dyn BusInterface) {
+    pub fn reset(&mut self, bus: &mut C) {
         self.a      = 0; 
         self.x      = 0;
         self.y      = 0; 
@@ -594,7 +527,7 @@ impl Olc6502 {
     // has happened, in a similar way to a reset, a programmable address
     // is read form hard coded location 0xFFFE, which is subsequently
     // set to the program counter.
-    pub fn irq(&mut self, bus: &mut dyn BusInterface) {
+    pub fn irq(&mut self, bus: &mut C) {
         if self.get_flag(FLAG6502_I) != 0 {
             self.nmi(bus);
         }
@@ -603,7 +536,7 @@ impl Olc6502 {
     // A Non-Maskable Interrupt cannot be ignored. It behaves in exactly the
     // same way as a regular IRQ, but reads the new program counter address
     // form location 0xFFFA.
-    pub fn nmi(&mut self, bus: &mut dyn BusInterface) {
+    pub fn nmi(&mut self, bus: &mut C) {
         // no wrapping because stkp is u8 so there are no overflows
         self.write(bus, 0x0100 + self.stkp as u16, ((self.pc >> 8) & 0x00FF) as u8);
         self.stkp = self.stkp.wrapping_sub(1); 
@@ -636,7 +569,7 @@ impl Olc6502 {
     // implement that delay by simply counting down the cycles required by 
     // the instruction. When it reaches 0, the instruction is complete, and
     // the next one is ready to be executed.
-    pub fn clock(&mut self, bus: &mut dyn BusInterface) {
+    pub fn clock(&mut self, bus: &mut C) {
     
         // Only actually do work once enough time has passed
         if self.cycles == 0 {
@@ -762,7 +695,7 @@ impl Olc6502 {
 
 
     // Execute one instruction by calling clock until cycles == 0
-    pub fn step_instruction(&mut self, bus: &mut dyn BusInterface) {
+    pub fn step_instruction(&mut self, bus: &mut C) {
         // Finish pending cycles
         while self.cycles > 0 {
             self.clock(bus);
@@ -813,7 +746,7 @@ impl Olc6502 {
     // There is no additional data required for this instruction. The instruction
     // does something very simple like like sets a status bit. However, we will
     // target the accumulator, for instructions like PHA
-    fn imp(&mut self, _bus: &mut dyn BusInterface) -> u8 { 
+    fn imp(&mut self, _bus: &mut C) -> u8 { 
         self.fetched = self.a; 
         0
     }
@@ -821,7 +754,7 @@ impl Olc6502 {
     // Address Mode: Immediate
     // The instruction expects the next byte to be used as a value, so we'll prep
     // the read address to point to the next byte
-    fn imm(&mut self, _bus: &mut dyn BusInterface) -> u8 { 
+    fn imm(&mut self, _bus: &mut C) -> u8 { 
         self.addr_abs = self.pc; 
         self.pc = self.pc.wrapping_add(1);
         0
@@ -833,14 +766,14 @@ impl Olc6502 {
     // Low byte: offset
     // We can think of the address space as 256 pages of 256 bytes
     // Zero-page: The effective address is between 0x0000 and 0x00FF.
-    fn zp0(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn zp0(&mut self, bus: &mut C) -> u8 { 
         self.addr_abs  = self.read(bus, self.pc) as u16;
         self.pc        = self.pc.wrapping_add(1);
         self.addr_abs &= 0x00FF; // Clear upper bits if addr_abs is not within range
         0
      }
      // Zero-page offset with x-register addressing
-    fn zpx(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn zpx(&mut self, bus: &mut C) -> u8 { 
         self.addr_abs  = self.read(bus, self.pc) as u16;
         self.addr_abs  = self.addr_abs.wrapping_add(self.x as u16);
         self.pc        = self.pc.wrapping_add(1);
@@ -848,7 +781,7 @@ impl Olc6502 {
         0
     }
      // Zero-page offset with y-register addressing
-    fn zpy(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn zpy(&mut self, bus: &mut C) -> u8 { 
         self.addr_abs  = self.read(bus, self.pc) as u16;
         self.addr_abs  = self.addr_abs.wrapping_add(self.y as u16);
         self.pc        = self.pc.wrapping_add(1);
@@ -860,7 +793,7 @@ impl Olc6502 {
     // This address mode is exclusive to branch instructions. The address
     // must reside within -128 to +127 of the branch instruction, i.e.
     // you cant directly branch to any address in the addressable range.
-    fn rel(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn rel(&mut self, bus: &mut C) -> u8 { 
         
         self.addr_rel = self.read(bus, self.pc) as u16;
         self.pc       = self.pc.wrapping_add(1);
@@ -871,7 +804,7 @@ impl Olc6502 {
         0
     }
     // Stick together two 8-bit values to form a 16-bit address
-    fn abs(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn abs(&mut self, bus: &mut C) -> u8 { 
         let lo : u16  = self.read(bus, self.pc) as u16;
         self.pc       = self.pc.wrapping_add(1);
         let hi : u16  = self.read(bus, self.pc) as u16;
@@ -884,7 +817,7 @@ impl Olc6502 {
     // Fundamentally the same as absolute addressing, but the contents of the X Register
     // is added to the supplied two byte address. If the resulting address changes
     // the page, an additional clock cycle is required
-    fn abx(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn abx(&mut self, bus: &mut C) -> u8 { 
         let lo : u16   = self.read(bus, self.pc) as u16;
         self.pc        = self.pc.wrapping_add(1);
         let hi : u16   = self.read(bus, self.pc) as u16;
@@ -906,7 +839,7 @@ impl Olc6502 {
     // Fundamentally the same as absolute addressing, but the contents of the Y Register
     // is added to the supplied two byte address. If the resulting address changes
     // the page, an additional clock cycle is required
-    fn aby(&mut self, bus: &mut dyn BusInterface) -> u8 {
+    fn aby(&mut self, bus: &mut C) -> u8 {
         let lo : u16   = self.read(bus, self.pc) as u16;
         self.pc        = self.pc.wrapping_add(1);
         let hi : u16   = self.read(bus, self.pc) as u16;
@@ -928,7 +861,7 @@ impl Olc6502 {
     // But there is a processor bug: https://www.nesdev.com/6502bugs.txt
     // An indirect JMP (xxFF) will fail because the MSB will be fetched from
     // address xx00 instead of page xx+1.
-    fn ind(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn ind(&mut self, bus: &mut C) -> u8 { 
 
         let lo : u16   = self.read(bus, self.pc) as u16;
         self.pc        = self.pc.wrapping_add(1);
@@ -949,7 +882,7 @@ impl Olc6502 {
     // The supplied 8-bit address is offset by X Register to index
     // a location in page 0x00. The actual 16-bit address is read 
     // from this location
-    fn izx(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn izx(&mut self, bus: &mut C) -> u8 { 
         
         let t : u16      = self.read(bus, self.pc) as u16;
         self.pc          = self.pc.wrapping_add(1);
@@ -969,7 +902,7 @@ impl Olc6502 {
     // here the actual 16-bit address is read, and the contents of
     // Y Register is added to it to offset it. If the offset causes a
     // change in page then an additional clock cycle is required.
-    fn izy(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn izy(&mut self, bus: &mut C) -> u8 { 
         let t : u16    = self.read(bus, self.pc) as u16;
         self.pc        = self.pc.wrapping_add(1);
         let lo : u16   = self.read(bus, (t    ) & 0x00FF) as u16;
@@ -1000,7 +933,7 @@ impl Olc6502 {
     // 256, i.e. no far reaching memory fetch is required. "fetched"
     // is a variable global to the CPU, and is set by calling this 
     // function. It also returns it for convenience.
-    pub fn fetch(&mut self, bus: &mut dyn BusInterface) -> u8 {
+    pub fn fetch(&mut self, bus: &mut C) -> u8 {
         let inst = LOOKUP[self.opcode as usize];
 
         if inst.addrmode != AddressMode::IMP {
@@ -1012,7 +945,7 @@ impl Olc6502 {
 
 
     // This function captures illegal opcodes
-    fn xxx(&mut self, _bus: &mut dyn BusInterface) -> u8 { 0 }
+    fn xxx(&mut self, _bus: &mut C) -> u8 { 0 }
 
     // Addition!
     // Add data fetched from memory to accumulator, including the carry bit
@@ -1045,7 +978,7 @@ impl Olc6502 {
     // 1  0  1 | 0 |  0  |  1  |   0   |
     // 1  1  0 | 1 |  1  |  0  |   1   |
     // 1  1  1 | 0 |  0  |  0  |   1   |
-    fn adc(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn adc(&mut self, bus: &mut C) -> u8 { 
         self.fetch(bus);
 
         // Perform the addition
@@ -1070,7 +1003,7 @@ impl Olc6502 {
     // Instruction: Bitwise Logic AND
     // Function:    A = A & M
     // Flags Out:   N, Z
-    fn and(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn and(&mut self, bus: &mut C) -> u8 { 
         self.fetch(bus);
         self.a = self.a & self.fetched; 
         self.set_flag(FLAG6502_Z, self.a == 0x00);
@@ -1081,7 +1014,7 @@ impl Olc6502 {
     // Instruction: Arithmetic Shift Left
     // Function:    A = C <- (A << 1) <- 0
     // Flags Out:   N, Z, C
-    fn asl(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn asl(&mut self, bus: &mut C) -> u8 { 
         self.fetch(bus);
         let temp: u16 = (self.fetched as u16) << 1; 
         self.set_flag(FLAG6502_C, (temp & 0xFF00) > 0);
@@ -1103,7 +1036,7 @@ impl Olc6502 {
     // A & memory
     // BIT modifies flags, but does not change memory or registers. The zero flag is set depending on the result of the accumulator AND memory value, effectively applying a bitmask and then checking if any bits are set. Bits 7 and 6 of the memory value are loaded directly into the negative and overflow flags, allowing them to be easily checked without having to load a mask into A.
     // Because BIT only changes CPU flags, it is sometimes used to trigger the read side effects of a hardware register without clobbering any CPU registers, or even to waste cycles as a 3-cycle NOP. As an advanced trick, it is occasionally used to hide a 1- or 2-byte instruction in its operand that is only executed if jumped to directly, allowing two code paths to be interleaved. However, because the instruction in the operand is treated as an address from which to read, this carries risk of triggering side effects if it reads a hardware register. This trick can be useful when working under tight constraints on space, time, or register usage. 
-    fn bit(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn bit(&mut self, bus: &mut C) -> u8 { 
         self.fetch(bus);
         self.set_flag(FLAG6502_Z, self.a & self.fetched   == 0x00);
         self.set_flag(FLAG6502_N, self.fetched & (1 << 7) != 0x00);
@@ -1115,7 +1048,7 @@ impl Olc6502 {
     // Trigger an interrupt request in software
     // Push current program counter and process flags to the stack
     // Set interrupt disable flag and jump to IRQ handler
-    fn brk(&mut self, bus: &mut dyn BusInterface) -> u8 {
+    fn brk(&mut self, bus: &mut C) -> u8 {
         self.pc = self.pc.wrapping_add(1);
         self.write(bus, 0x0100 + self.stkp as u16, ((self.pc >> 8) & 0x00FF) as u8);
         self.stkp = self.stkp.wrapping_sub(1); 
@@ -1142,7 +1075,7 @@ impl Olc6502 {
 
      // helper function to implement branching
      // Consumes 1 or 2 cycles and updates pc to pc + addr_rel
-    fn branch(&mut self, _bus: &mut dyn BusInterface) {
+    fn branch(&mut self, _bus: &mut C) {
         self.cycles   = self.cycles.wrapping_add(1);
         self.addr_abs = self.pc.wrapping_add(self.addr_rel); 
 
@@ -1155,7 +1088,7 @@ impl Olc6502 {
     
     // Instruction: Branch if Carry Clear
     // Function:    if(C == 0) pc = address 
-    fn bcc(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn bcc(&mut self, bus: &mut C) -> u8 { 
         if self.get_flag(FLAG6502_C) == 0 {
             self.branch(bus);
         }
@@ -1164,7 +1097,7 @@ impl Olc6502 {
 
     // Instruction: Branch if Carry Set
     // Function:    if(C == 1) pc = address
-    fn bcs(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn bcs(&mut self, bus: &mut C) -> u8 { 
         if self.get_flag(FLAG6502_C) == 1 {
             self.branch(bus);
         }
@@ -1173,7 +1106,7 @@ impl Olc6502 {
     
     // Instruction: Branch if Equal
     // Function:    if(Z == 1) pc = address
-    fn beq(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn beq(&mut self, bus: &mut C) -> u8 { 
         if self.get_flag(FLAG6502_Z) == 1 {
             self.branch(bus);
         }
@@ -1181,7 +1114,7 @@ impl Olc6502 {
     }
     // Instruction: Branch if Negative
     // Function:    if(N == 1) pc = address
-    fn bmi(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn bmi(&mut self, bus: &mut C) -> u8 { 
         if self.get_flag(FLAG6502_N) == 1 {
             self.branch(bus);
         }
@@ -1189,7 +1122,7 @@ impl Olc6502 {
     }
     // Instruction: Branch if Not Equal
     // Function:    if(Z == 0) pc = address
-    fn bne(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn bne(&mut self, bus: &mut C) -> u8 { 
         if self.get_flag(FLAG6502_Z) == 0 {
             self.branch(bus);
         }
@@ -1197,7 +1130,7 @@ impl Olc6502 {
     }
     // Instruction: Branch if Positive
     // Function:    if(N == 0) pc = address
-    fn bpl(&mut self, bus: &mut dyn BusInterface) -> u8 {
+    fn bpl(&mut self, bus: &mut C) -> u8 {
         if self.get_flag(FLAG6502_N) == 0 {
             self.branch(bus);
         }
@@ -1205,14 +1138,14 @@ impl Olc6502 {
     }
 
     // Branch if overflow clear - set pc to pc + addr_rel
-    fn bvc(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn bvc(&mut self, bus: &mut C) -> u8 { 
         if self.get_flag(FLAG6502_V) == 0 {
             self.branch(bus);
         }
         0
     }
     // Branch if overflow set - set pc to pc + addr_rel
-    fn bvs(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn bvs(&mut self, bus: &mut C) -> u8 { 
         if self.get_flag(FLAG6502_V) == 1 {
             self.branch(bus);
         }
@@ -1221,14 +1154,14 @@ impl Olc6502 {
 
     // Instruction: Clear Carry Flag
     // Function:    C = 0
-    fn clc(&mut self, _bus: &mut dyn BusInterface) -> u8 {
+    fn clc(&mut self, _bus: &mut C) -> u8 {
         self.set_flag(FLAG6502_C, false);
         0
     }
     
     // Instruction: Clear Decimal Flag
     // Function:    D = 0
-    fn cld(&mut self, _bus: &mut dyn BusInterface) -> u8 {
+    fn cld(&mut self, _bus: &mut C) -> u8 {
         self.set_flag(FLAG6502_D, false);
         0
     }
@@ -1236,7 +1169,7 @@ impl Olc6502 {
     
     // Instruction: Disable Interrupts / Clear Interrupt Flag
     // Function:    I = 0
-    fn cli(&mut self, _bus: &mut dyn BusInterface) -> u8 {
+    fn cli(&mut self, _bus: &mut C) -> u8 {
         self.set_flag(FLAG6502_I, false);
         0
     }
@@ -1244,7 +1177,7 @@ impl Olc6502 {
         
     // Instruction: Clear Overflow Flag
     // Function:    V = 0
-    fn clv(&mut self, _bus: &mut dyn BusInterface) -> u8 {
+    fn clv(&mut self, _bus: &mut C) -> u8 {
         self.set_flag(FLAG6502_V, false);
         0
     }
@@ -1253,7 +1186,7 @@ impl Olc6502 {
     // Instruction: Compare Accumulator
     // Function:    C <- A >= M      Z <- (A - M) == 0
     // Flags Out:   N, C, Z
-    fn cmp(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn cmp(&mut self, bus: &mut C) -> u8 { 
         self.fetch(bus);
         // keep the borrow bit information by computing as u16
         let temp: u16 = (self.a as u16).wrapping_sub(self.fetched as u16);
@@ -1266,7 +1199,7 @@ impl Olc6502 {
     // Instruction: Compare X Register
     // Function:    C <- X >= M      Z <- (X - M) == 0
     // Flags Out:   N, C, Z
-    fn cpx(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn cpx(&mut self, bus: &mut C) -> u8 { 
         self.fetch(bus);
         let temp: u16 = (self.x as u16).wrapping_sub(self.fetched as u16);
         self.set_flag(FLAG6502_C, self.x >= self.fetched);
@@ -1280,7 +1213,7 @@ impl Olc6502 {
     // Instruction: Compare Y Register
     // Function:    C <- Y >= M      Z <- (Y - M) == 0
     // Flags Out:   N, C, Z
-    fn cpy(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn cpy(&mut self, bus: &mut C) -> u8 { 
         self.fetch(bus);
         let temp: u16 = (self.y as u16).wrapping_sub(self.fetched as u16);
         self.set_flag(FLAG6502_C, self.y >= self.fetched);
@@ -1292,7 +1225,7 @@ impl Olc6502 {
     // Instruction: Bitwise Logic XOR
     // Function:    A = A xor M
     // Flags Out:   N, Z
-    fn eor(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn eor(&mut self, bus: &mut C) -> u8 { 
         self.fetch(bus);
         self.a = self.a ^ self.fetched; 
         self.set_flag(FLAG6502_Z, self.a        == 0x00);
@@ -1304,7 +1237,7 @@ impl Olc6502 {
     // Instruction: Bitwise Logic OR
     // Function:    A = A | M
     // Flags Out:   N, Z
-    fn ora(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn ora(&mut self, bus: &mut C) -> u8 { 
         self.fetch(bus);
         self.a = self.a | self.fetched; 
         self.set_flag(FLAG6502_Z, self.a        == 0x00);
@@ -1316,7 +1249,7 @@ impl Olc6502 {
     // Instruction: Decrement Value at Memory Location
     // Function:    M = M - 1
     // Flags Out:   N, Z
-    fn dec(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn dec(&mut self, bus: &mut C) -> u8 { 
         self.fetch(bus);
         let temp: u8 = self.fetched.wrapping_sub(1);
         self.write(bus, self.addr_abs, temp);
@@ -1328,7 +1261,7 @@ impl Olc6502 {
     // Instruction: Decrement X Register
     // Function:    X = X - 1
     // Flags Out:   N, Z
-    fn dex(&mut self, _bus: &mut dyn BusInterface) -> u8 { 
+    fn dex(&mut self, _bus: &mut C) -> u8 { 
         self.x = self.x.wrapping_sub(1);
         self.set_flag(FLAG6502_Z, self.x        == 0x00);
         self.set_flag(FLAG6502_N, self.x & 0x80 != 0x00);
@@ -1338,7 +1271,7 @@ impl Olc6502 {
     // Instruction: Decrement Y Register
     // Function:    Y = Y - 1
     // Flags Out:   N, Z
-    fn dey(&mut self, _bus: &mut dyn BusInterface) -> u8 { 
+    fn dey(&mut self, _bus: &mut C) -> u8 { 
         self.y = self.y.wrapping_sub(1);
         self.set_flag(FLAG6502_Z, self.y        == 0x00);
         self.set_flag(FLAG6502_N, self.y & 0x80 != 0x00);
@@ -1348,7 +1281,7 @@ impl Olc6502 {
     // Instruction: Increment Value at Memory Location
     // Function:    M = M + 1
     // Flags Out:   N, Z
-    fn inc(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn inc(&mut self, bus: &mut C) -> u8 { 
         self.fetch(bus);
         let temp: u8 = self.fetched.wrapping_add(1);
         self.write(bus, self.addr_abs, temp);
@@ -1361,7 +1294,7 @@ impl Olc6502 {
     // Instruction: Increment X Register
     // Function:    X = X + 1
     // Flags Out:   N, Z
-    fn inx(&mut self, _bus: &mut dyn BusInterface) -> u8 { 
+    fn inx(&mut self, _bus: &mut C) -> u8 { 
         self.x = self.x.wrapping_add(1);
         self.set_flag(FLAG6502_Z, self.x        == 0x00);
         self.set_flag(FLAG6502_N, self.x & 0x80 != 0x00);
@@ -1371,7 +1304,7 @@ impl Olc6502 {
     // Instruction: Increment Y Register
     // Function:    Y = Y + 1
     // Flags Out:   N, Z
-    fn iny(&mut self, _bus: &mut dyn BusInterface) -> u8 { 
+    fn iny(&mut self, _bus: &mut C) -> u8 { 
         self.y = self.y.wrapping_add(1);
         self.set_flag(FLAG6502_Z, self.y        == 0x00);
         self.set_flag(FLAG6502_N, self.y & 0x80 != 0x00);
@@ -1381,14 +1314,14 @@ impl Olc6502 {
     
     // Instruction: Jump To Location
     // Function:    pc = address
-    fn jmp(&mut self, _bus: &mut dyn BusInterface) -> u8 { 
+    fn jmp(&mut self, _bus: &mut C) -> u8 { 
         self.pc = self.addr_abs;
         0
     }
         
     // Instruction: Jump To Sub-Routine
     // Function:    Push current pc to stack, pc = address
-    fn jsr(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn jsr(&mut self, bus: &mut C) -> u8 { 
         
         self.pc  = self.pc.wrapping_sub(1);
         self.write(bus, 0x0100 + self.stkp as u16, ((self.pc >> 8) & 0x00FF) as u8);
@@ -1403,7 +1336,7 @@ impl Olc6502 {
     // Instruction: Load The Accumulator
     // Function:    A = M
     // Flags Out:   N, Z
-    fn lda(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn lda(&mut self, bus: &mut C) -> u8 { 
         self.fetch(bus);
         self.a = self.fetched;
         self.set_flag(FLAG6502_Z, self.a        == 0x00);
@@ -1414,7 +1347,7 @@ impl Olc6502 {
     // Instruction: Load The X Register
     // Function:    X = M
     // Flags Out:   N, Z
-    fn ldx(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn ldx(&mut self, bus: &mut C) -> u8 { 
         self.fetch(bus);
         self.x = self.fetched;
         self.set_flag(FLAG6502_Z, self.x        == 0x00);
@@ -1426,7 +1359,7 @@ impl Olc6502 {
     // Instruction: Load The Y Register
     // Function:    Y = M
     // Flags Out:   N, Z
-    fn ldy(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn ldy(&mut self, bus: &mut C) -> u8 { 
         self.fetch(bus);
         self.y = self.fetched;
         self.set_flag(FLAG6502_Z, self.y        == 0x00);
@@ -1436,7 +1369,7 @@ impl Olc6502 {
     
     // Instruction: Logical Shift Right
     // value = value >> 1, or visually: 0 -> [76543210] -> C 
-    fn lsr(&mut self, bus: &mut dyn BusInterface) -> u8 {
+    fn lsr(&mut self, bus: &mut C) -> u8 {
         self.fetch(bus);
         self.set_flag(FLAG6502_C, self.fetched & 0x01 != 0x00);
 
@@ -1457,7 +1390,7 @@ impl Olc6502 {
     }
 
     // No operation codes based on https://wiki.nesdev.com/w/index.php/CPU_unofficial_opcodes
-    fn nop(&mut self, _bus: &mut dyn BusInterface) -> u8 { 
+    fn nop(&mut self, _bus: &mut C) -> u8 { 
         match self.opcode {
             0x1C | 0x3C | 0x5C | 0x7C | 0xDC | 0xFC => 1,
             _ => 0,
@@ -1467,7 +1400,7 @@ impl Olc6502 {
 
     // Push accumulator to the stack
     // 0x0100 is hard-coded stack-location
-    fn pha(&mut self, bus: &mut dyn BusInterface) -> u8 {
+    fn pha(&mut self, bus: &mut C) -> u8 {
         self.write(bus, 0x0100 + (self.stkp as u16), self.a);
         self.stkp = self.stkp.wrapping_sub(1);
         0
@@ -1477,7 +1410,7 @@ impl Olc6502 {
     // Instruction: Push Status Register to Stack
     // Function:    status -> stack
     // Note:        Break flag is set to 1 before push
-    fn php(&mut self, bus: &mut dyn BusInterface) -> u8 {
+    fn php(&mut self, bus: &mut C) -> u8 {
         self.write(bus, 0x0100 + (self.stkp as u16), self.status | FLAG6502_B | FLAG6502_U);
         self.set_flag(FLAG6502_B, false); 
         // self.set_flag(FLAG6502_U, false);  Comment this out compared to Javid9x' implementation to satisfy Harte
@@ -1486,7 +1419,7 @@ impl Olc6502 {
     }
     // Pop from stack
     // 0x0100 is hard-coded stack-location
-    fn pla(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn pla(&mut self, bus: &mut C) -> u8 { 
         self.stkp = self.stkp.wrapping_add(1); 
         self.a = self.read(bus, (0x0100 as u16) + (self.stkp as u16));
         self.set_flag(FLAG6502_Z, self.a == 0x00); 
@@ -1496,7 +1429,7 @@ impl Olc6502 {
     
     // Instruction: Pop Status Register off Stack
     // Function:    Status <- stack
-    fn plp(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn plp(&mut self, bus: &mut C) -> u8 { 
         self.stkp   = self.stkp.wrapping_add(1); 
         // Per spec, this should ignore U and B
         // U (bit 5) should always be 1 internally.
@@ -1516,7 +1449,7 @@ impl Olc6502 {
     // New bit 0  = old Carry
     // New bit 7  = old bit 6
     // Carry      = old bit 7
-    fn rol(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn rol(&mut self, bus: &mut C) -> u8 { 
         self.fetch(bus);
         let temp = ((self.fetched as u16) << 1 ) | (self.get_flag(FLAG6502_C) as u16);
         self.set_flag(FLAG6502_C, temp & 0xFF00 != 0x0000);
@@ -1533,7 +1466,7 @@ impl Olc6502 {
         0
     }
 
-    fn ror(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn ror(&mut self, bus: &mut C) -> u8 { 
         self.fetch(bus);
         let temp = ((self.fetched as u16) >> 1 ) | ((self.get_flag(FLAG6502_C) as u16) << 7);
         self.set_flag(FLAG6502_C, self.fetched  & 0x01  != 0x00  );
@@ -1554,7 +1487,7 @@ impl Olc6502 {
     // pull NVxxDIZC flags from stack
     // pull PC low byte from stack
     // pull PC high byte from stack 
-    fn rti(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn rti(&mut self, bus: &mut C) -> u8 { 
         self.stkp    = self.stkp.wrapping_add(1); 
         self.status  = self.read(bus, 0x0100 + self.stkp as u16);
         // Add this compared to Javidx9's implementation to satisfy Harte
@@ -1572,7 +1505,7 @@ impl Olc6502 {
     // pull PC low byte from stack
     // pull PC high byte from stack    
     // PC = PC + 1     
-    fn rts(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn rts(&mut self, bus: &mut C) -> u8 { 
         
         self.stkp   = self.stkp.wrapping_add(1); 
         self.pc     = self.read(bus, 0x0100 + self.stkp as u16) as u16;
@@ -1588,7 +1521,7 @@ impl Olc6502 {
     // 5 = 00000101
     //-5 = 11111010 + 00000001
     // implement like addition
-    fn sbc(&mut self, bus: &mut dyn BusInterface) -> u8 {
+    fn sbc(&mut self, bus: &mut C) -> u8 {
         self.fetch(bus);
 
         
@@ -1615,7 +1548,7 @@ impl Olc6502 {
 
     // Instruction: Set Carry Flag
     // Function:    C = 1
-    fn sec(&mut self, _bus: &mut dyn BusInterface) -> u8 { 
+    fn sec(&mut self, _bus: &mut C) -> u8 { 
         self.set_flag(FLAG6502_C, true);
         0
      }
@@ -1623,35 +1556,35 @@ impl Olc6502 {
 
     // Instruction: Set Decimal Flag
     // Function:    D = 1
-    fn sed(&mut self, _bus: &mut dyn BusInterface) -> u8 { 
+    fn sed(&mut self, _bus: &mut C) -> u8 { 
         self.set_flag(FLAG6502_D, true);
         0
     }
     
     // Instruction: Set Interrupt Flag / Enable Interrupts
     // Function:    I = 1
-    fn sei(&mut self, _bus: &mut dyn BusInterface) -> u8 { 
+    fn sei(&mut self, _bus: &mut C) -> u8 { 
         self.set_flag(FLAG6502_I, true);
         0
      }
 
     // Instruction: Store Accumulator at Address
     // Function:    M = A
-    fn sta(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn sta(&mut self, bus: &mut C) -> u8 { 
         self.write(bus, self.addr_abs, self.a);
         0
      }
     
     // Instruction: Store X Register at Address
     // Function:    M = X
-    fn stx(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn stx(&mut self, bus: &mut C) -> u8 { 
         self.write(bus, self.addr_abs, self.x);
         0
      }
     
     // Instruction: Store Y Register at Address
     // Function:    M = Y
-    fn sty(&mut self, bus: &mut dyn BusInterface) -> u8 {
+    fn sty(&mut self, bus: &mut C) -> u8 {
         self.write(bus, self.addr_abs, self.y);
         0
      }
@@ -1660,7 +1593,7 @@ impl Olc6502 {
     // Instruction: Transfer Accumulator to X Register
     // Function:    X = A
     // Flags Out:   N, Z
-    fn tax(&mut self, _bus: &mut dyn BusInterface) -> u8 { 
+    fn tax(&mut self, _bus: &mut C) -> u8 { 
         self.x = self.a;
         self.set_flag(FLAG6502_Z, self.x        == 0x00); 
         self.set_flag(FLAG6502_N, self.x & 0x80 != 0x00); 
@@ -1670,7 +1603,7 @@ impl Olc6502 {
     // Instruction: Transfer Accumulator to Y Register
     // Function:    Y = A
     // Flags Out:   N, Z
-    fn tay(&mut self, _bus: &mut dyn BusInterface) -> u8 {  
+    fn tay(&mut self, _bus: &mut C) -> u8 {  
         self.y = self.a;
         self.set_flag(FLAG6502_Z, self.y        == 0x00); 
         self.set_flag(FLAG6502_N, self.y & 0x80 != 0x00); 
@@ -1680,7 +1613,7 @@ impl Olc6502 {
     // Instruction: Transfer Stack Pointer to X Register
     // Function:    X = stack pointer
     // Flags Out:   N, Z
-    fn tsx(&mut self, _bus: &mut dyn BusInterface) -> u8 { 
+    fn tsx(&mut self, _bus: &mut C) -> u8 { 
         self.x = self.stkp;
         self.set_flag(FLAG6502_Z, self.x        == 0x00); 
         self.set_flag(FLAG6502_N, self.x & 0x80 != 0x00); 
@@ -1690,7 +1623,7 @@ impl Olc6502 {
     // Instruction: Transfer X Register to Accumulator
     // Function:    A = X
     // Flags Out:   N, Z
-    fn txa(&mut self, _bus: &mut dyn BusInterface) -> u8 { 
+    fn txa(&mut self, _bus: &mut C) -> u8 { 
         self.a = self.x;
         self.set_flag(FLAG6502_Z, self.a        == 0x00); 
         self.set_flag(FLAG6502_N, self.a & 0x80 != 0x00); 
@@ -1700,7 +1633,7 @@ impl Olc6502 {
     
     // Instruction: Transfer X Register to Stack Pointer
     // Function:    stack pointer = X
-    fn txs(&mut self, _bus: &mut dyn BusInterface) -> u8 { 
+    fn txs(&mut self, _bus: &mut C) -> u8 { 
         self.stkp = self.x;
         0
     }
@@ -1709,7 +1642,7 @@ impl Olc6502 {
     // Instruction: Transfer Y Register to Accumulator
     // Function:    A = Y
     // Flags Out:   N, Z
-    fn tya(&mut self, _bus: &mut dyn BusInterface) -> u8 {  
+    fn tya(&mut self, _bus: &mut C) -> u8 {  
         self.a = self.y;
         self.set_flag(FLAG6502_Z, self.a        == 0x00); 
         self.set_flag(FLAG6502_N, self.a & 0x80 != 0x00); 
