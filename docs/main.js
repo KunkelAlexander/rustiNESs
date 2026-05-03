@@ -9,6 +9,7 @@ let running    = false;
 let rafHandle  = null;
 let audioCtx   = null;
 let nesNode    = null;
+let audioBufferLevel = 0;
 
 // "nes" | "cpu" | "fullscreen"
 let mode       = "nes";
@@ -207,23 +208,39 @@ function renderPatternTables() {
 // ═══════════════════════════════════════════════════════
 //  Audio
 // ═══════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+//  Audio
+// ═══════════════════════════════════════════════════════
 
 async function initAudio() {
-  log("x");
-    const blob = new Blob([`
+  const blob = new Blob([`
     class NESProcessor extends AudioWorkletProcessor {
       constructor() {
         super();
-        this.ring = new Float32Array(32768);
-        this.w = 0; this.r = 0;
+        this.ring = new Float32Array(65536);
+        this.w = 0;
+        this.r = 0;
+        this.requested = false;
+
         this.port.onmessage = ({data}) => {
-          for (const s of data) this.ring[this.w++ % 32768] = s;
+          // Main thread sent samples — fill the ring buffer
+          for (const s of data) this.ring[this.w++ % 65536] = s;
+          this.requested = false;
         };
       }
+
       process(_, outputs) {
-        const out = outputs[0][0];
-        if (this.w - this.r < out.length) { out.fill(0); return true; }
-        for (let i = 0; i < out.length; i++) out[i] = this.ring[this.r++ % 32768];
+        const out       = outputs[0][0];
+        const available = this.w - this.r;
+
+        // Request more samples when buffer drops below 2048 (~46ms)
+        if (!this.requested && available < 2048) {
+          this.port.postMessage("need");
+          this.requested = true;
+        }
+
+        if (available < out.length) { out.fill(0); return true; }
+        for (let i = 0; i < out.length; i++) out[i] = this.ring[this.r++ % 65536];
         return true;
       }
     }
@@ -235,6 +252,17 @@ async function initAudio() {
   nesNode = new AudioWorkletNode(audioCtx, "nes-processor");
   nesNode.connect(audioCtx.destination);
 
+  // Worklet requested samples — run emulation and reply immediately
+  nesNode.port.onmessage = ({data}) => {
+  if (data === "need" && emu) {
+    const t0 = performance.now();
+    emu.run_frame();
+    const samples = emu.get_audio_samples();
+    const t1 = performance.now();
+    console.log(`run_frame: ${(t1-t0).toFixed(2)}ms | samples: ${samples.length}`);
+    nesNode.port.postMessage(samples, [samples.buffer]);
+  }
+};
 }
 
 // ═══════════════════════════════════════════════════════
@@ -247,12 +275,10 @@ function frame() {
 
   try {
     if (mode === "cpu") {
-      // CPU debug: step one clock, refresh all debug panels
       emu.cpu_clock();
       updateDebugUI();
 
     } else if (mode === "nes") {
-      // NES debug: run full frame, update debug + small canvas + pattern tables
       emu.run_frame();
       renderDebugFrame();
       patternFrameCounter++;
@@ -260,13 +286,10 @@ function frame() {
       updateDebugUI();
 
     } else if (mode === "fullscreen") {
-      // Fullscreen: run full frame, render to fullscreen canvas ONLY — no debug work
-      emu.run_frame();
-      const samples = emu.get_audio_samples();
-      nesNode.port.postMessage(samples);
+      // Audio drives emulation — rAF only renders
       renderFullscreenFrame();
-      // No updateDebugUI, no renderPatternTables, no log
     }
+
   } catch (e) {
     running = false;
     setStatus(false, "Runtime error");
@@ -385,9 +408,11 @@ async function enterFullscreen() {
   }
   if (audioCtx?.state === "suspended") await audioCtx.resume()
 
-  // Pre-fill ~10 frames worth of silence so worklet starts with headroom
-  const prefill = new Float32Array(735 * 10);
-  nesNode.port.postMessage(prefill);
+  // Prime with 10 frames so worklet starts healthy
+  for (let i = 0; i < 10; i++) {
+    emu.run_frame();
+    nesNode.port.postMessage(emu.get_audio_samples());
+  }
 
   $("fsScreen")?.focus();
   startRun();
