@@ -137,11 +137,11 @@ fn main() -> std::io::Result<()> {
 
     // Also print average
     let t0 = Instant::now();
-    for _ in 0..600 {
+    for _ in 0..10000 {
         emu.run_frame();
     }
-    let avg = t0.elapsed().as_secs_f64() * 1000.0 / 600.0;
-    println!("avg over 600 frames: {:.2}ms", avg);
+    let avg = t0.elapsed().as_secs_f64() * 1000.0 / 10000.0;
+    println!("avg over 10,000 frames: {:.2}ms", avg);
     
     // Dump after running
     output_pattern_table(&emu, "output/pattern_table_after.txt")?;
