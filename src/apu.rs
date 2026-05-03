@@ -1,6 +1,6 @@
 use crate::{interfaces::{ApuInterface}};
 pub struct Olc2A03 {
-    pulse1_enable: bool, 
+    //pulse1_enable: bool, 
     pulse1_sample: f32
 }
 
@@ -8,7 +8,7 @@ pub struct Olc2A03 {
 impl Olc2A03 {
     pub fn new() -> Self {
         Self {
-            pulse1_enable: true, 
+            //pulse1_enable: true, 
             pulse1_sample: 0.0,
         }
     }
@@ -39,7 +39,7 @@ impl ApuInterface for Olc2A03 {
         data
     }
 
-    fn write_cpu(&mut self, addr: u16, data: u8)  {
+    fn write_cpu(&mut self, addr: u16, _data: u8)  {
         match addr {
             0x4000 => {}, 
             0x4001 => {}, 

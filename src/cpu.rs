@@ -1061,7 +1061,7 @@ impl Olc6502 {
 
         // Set up signed overflow bit based on the truth table up there
         // V = ~(A^M) & (A^R) = ~t1 & t2
-        self.set_flag(FLAG6502_V,  ((!t1 & t2 & 0x0080) != 0));
+        self.set_flag(FLAG6502_V,  (!t1 & t2 & 0x0080) != 0);
 
         self.a = (temp & 0x00FF) as u8; 
         1 // can require an additional clock cycle
@@ -1142,7 +1142,7 @@ impl Olc6502 {
 
      // helper function to implement branching
      // Consumes 1 or 2 cycles and updates pc to pc + addr_rel
-    fn branch(&mut self, bus: &mut dyn BusInterface) {
+    fn branch(&mut self, _bus: &mut dyn BusInterface) {
         self.cycles   = self.cycles.wrapping_add(1);
         self.addr_abs = self.pc.wrapping_add(self.addr_rel); 
 
@@ -1328,7 +1328,7 @@ impl Olc6502 {
     // Instruction: Decrement X Register
     // Function:    X = X - 1
     // Flags Out:   N, Z
-    fn dex(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn dex(&mut self, _bus: &mut dyn BusInterface) -> u8 { 
         self.x = self.x.wrapping_sub(1);
         self.set_flag(FLAG6502_Z, self.x        == 0x00);
         self.set_flag(FLAG6502_N, self.x & 0x80 != 0x00);
@@ -1338,7 +1338,7 @@ impl Olc6502 {
     // Instruction: Decrement Y Register
     // Function:    Y = Y - 1
     // Flags Out:   N, Z
-    fn dey(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn dey(&mut self, _bus: &mut dyn BusInterface) -> u8 { 
         self.y = self.y.wrapping_sub(1);
         self.set_flag(FLAG6502_Z, self.y        == 0x00);
         self.set_flag(FLAG6502_N, self.y & 0x80 != 0x00);
@@ -1361,7 +1361,7 @@ impl Olc6502 {
     // Instruction: Increment X Register
     // Function:    X = X + 1
     // Flags Out:   N, Z
-    fn inx(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn inx(&mut self, _bus: &mut dyn BusInterface) -> u8 { 
         self.x = self.x.wrapping_add(1);
         self.set_flag(FLAG6502_Z, self.x        == 0x00);
         self.set_flag(FLAG6502_N, self.x & 0x80 != 0x00);
@@ -1371,7 +1371,7 @@ impl Olc6502 {
     // Instruction: Increment Y Register
     // Function:    Y = Y + 1
     // Flags Out:   N, Z
-    fn iny(&mut self, bus: &mut dyn BusInterface) -> u8 { 
+    fn iny(&mut self, _bus: &mut dyn BusInterface) -> u8 { 
         self.y = self.y.wrapping_add(1);
         self.set_flag(FLAG6502_Z, self.y        == 0x00);
         self.set_flag(FLAG6502_N, self.y & 0x80 != 0x00);
@@ -1606,7 +1606,7 @@ impl Olc6502 {
 
         // Set up signed overflow bit based on the truth table up there
         // V = ~(A^M) & (A^R) = ~t1 & t2
-        self.set_flag(FLAG6502_V,  ((!t1 & t2 & 0x0080) != 0));
+        self.set_flag(FLAG6502_V,  (!t1 & t2 & 0x0080) != 0);
 
         self.a = (temp & 0x00FF) as u8; 
         1 // can require an additional clock cycle

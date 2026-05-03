@@ -11,7 +11,6 @@ pub use nes::Nes;
 
 use std::fs;
 use std::io::{Write, BufWriter};
-use std::error::Error;
 
 
 fn output_pattern_table(emu: &Nes, path: &str) -> std::io::Result<()> {
@@ -83,7 +82,7 @@ fn output_name_table(emu: &Nes, path: &str) -> std::io::Result<()> {
     Ok(())
 }
 
-fn output_frame(emu: &Nes, path: &str) -> Result<(), Box<dyn Error>> {
+fn output_frame(emu: &Nes, path: &str) -> std::io::Result<()>  {
     let frame = emu.frame();
     let width = 256;
     let height = 240;
@@ -106,7 +105,6 @@ fn output_frame(emu: &Nes, path: &str) -> Result<(), Box<dyn Error>> {
         writeln!(writer)?; // newline
     }
 
-    writer.flush()?; // optional but nice
 
     println!("Saved ASCII frame to {}", path);
     Ok(())
@@ -133,16 +131,22 @@ fn main() -> std::io::Result<()> {
     // Dump before running
     output_pattern_table(&emu, "output/pattern_table_before.txt")?;
     output_name_table   (&emu, "output/name_table_before.txt")?;
-    output_frame        (&emu, "output/frame_before.txt");
+    output_frame        (&emu, "output/frame_before.txt")?;
 
-    for _ in 0..10000 {
+    use std::time::Instant;
+
+    // Also print average
+    let t0 = Instant::now();
+    for _ in 0..600 {
         emu.run_frame();
     }
+    let avg = t0.elapsed().as_secs_f64() * 1000.0 / 600.0;
+    println!("avg over 600 frames: {:.2}ms", avg);
     
     // Dump after running
     output_pattern_table(&emu, "output/pattern_table_after.txt")?;
     output_name_table   (&emu, "output/name_table_after.txt")?;
-    output_frame        (&emu, "output/frame_after.txt");
+    output_frame        (&emu, "output/frame_after.txt")?;
 
     Ok(())
 }

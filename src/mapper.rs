@@ -16,7 +16,7 @@ impl MapperInterface for Mapper000 {
 	//     CPU Address Bus          PRG ROM
 	//     0x8000 -> 0xFFFF: Map    0x0000 -> 0x7FFF	
     fn cpu_map_read(&self, addr: u16) -> Option<usize> {
-        if addr >= 0x8000 && addr <= 0xFFFF {
+        if addr >= 0x8000 {
             let mapped: usize = (addr & (if self.prg_banks > 1 {0x7FFF} else {0x3FFF})) as usize;
             Some(mapped)
         } else {
@@ -24,8 +24,8 @@ impl MapperInterface for Mapper000 {
         }
     }
 
-    fn cpu_map_write(&mut self, addr: u16, data: u8) -> Option<usize> {
-        if addr >= 0x8000 && addr <= 0xFFFF {
+    fn cpu_map_write(&mut self, addr: u16, _data: u8) -> Option<usize> {
+        if addr >= 0x8000 {
             let mapped: usize = (addr & (if self.prg_banks > 1 {0x7FFF} else {0x3FFF})) as usize;
             Some(mapped)
         } else {
@@ -37,15 +37,15 @@ impl MapperInterface for Mapper000 {
 	// PPU Address Bus          CHR ROM
 	// 0x0000 -> 0x1FFF: Map    0x0000 -> 0x1FFF
     fn ppu_map_read (&self, addr: u16) -> Option<usize> {
-        if addr >= 0x0000 && addr <= 0x1FFF {
+        if addr <= 0x1FFF {
             Some(addr as usize)
         } else {
             None
         }
     }
 
-    fn ppu_map_write(&mut self, addr: u16, data: u8) -> Option<usize> {
-        if addr >= 0x0000 && addr <= 0x1FFF && self.chr_banks == 0 {
+    fn ppu_map_write(&mut self, addr: u16, _data: u8) -> Option<usize> {
+        if addr <= 0x1FFF && self.chr_banks == 0 {
             Some(addr as usize)
         } else {
             None

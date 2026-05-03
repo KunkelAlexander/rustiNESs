@@ -1,5 +1,3 @@
-use crate::cartridge::Cartridge;
-
 pub trait BusInterface { 
     fn read (&mut self, addr: u16, _read_only: bool) -> u8; 
     fn write(&mut self, addr: u16, data: u8); 
