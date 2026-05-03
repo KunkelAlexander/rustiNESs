@@ -36,7 +36,7 @@ impl NES {
     }
 
     pub fn run_frame(&mut self) {
-        self.inner.run_frame();
+        //self.inner.run_frame();
         self.inner.generate_audio_frame();
     }
 

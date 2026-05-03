@@ -50,7 +50,8 @@ This project was written by hand as a learning exercise. I mainly used LLMs for 
         - We run the emulation for 1 frame
         - Push ~44100/60 = 735 samples to ring buffer
         - Audio worklet drains ring buffer independently
-        - *Result*: It get terrible-sounding buffer underruns. Audio is really a different beast. 
+        - *Result*: If the emulation takes too long, I get terrible-sounding buffer underruns. Even for 6ms per emulation frame, I get some crackling. Audio is really a different beast. 
+        
     - **Approach 2**: 
         - Audio worklet fires every 1/44100 = 2.9s
         - Reports buffer level back to main thread
