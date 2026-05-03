@@ -43,12 +43,35 @@ This project was written by hand as a learning exercise. I mainly used LLMs for 
 
 ![](figures/32.png)
 
-- Sound emulation here? The sound thread runs in real-time and NES emulation is fast
-- Every time the sound thread requests a sample, we perform enough NES emulation to provide the sound
-- The sound thread controls the NES emulation - This is called synchronising to sound
-- For fun, I tried to not do this and just send audio samples to a ring buffer - the speed of the emulation is controlled by the 60 FPS loop in html
-    - It get terrible-sounding buffer underruns. Audio is really a different beast. 
-    
+
+- Different approaches for producing audio 
+    - **Approach 1**: 
+        - Frame loop fires every 1/60 = 16.7ms 
+        - We run the emulation for 1 frame
+        - Push ~44100/60 = 735 samples to ring buffer
+        - Audio worklet drains ring buffer independently
+        - *Result*: It get terrible-sounding buffer underruns. Audio is really a different beast. 
+    - **Approach 2**: 
+        - Audio worklet fires every 1/44100 = 2.9s
+        - Reports buffer level back to main thread
+        - Main thread checks buffer level
+        - If buffer level is low, we run 2 frames of emulations and push 2x samples, 
+        - If buffer level is high, we skip the emulation and push nothing 
+    - **Approch 3 - the gold standard and Javidx9's approach**:
+        - Audio worklet fires every 1/44100 = 2.9s
+        - Asks: How many samples do I need
+        - The emulation runs long enough to produce those samples. This works because NES emulation is fast
+        - Whatever the PPU last rendered is drawn to the screen 
+        - This is called synchronising to sound
+- Actually, I realised that the performance of the emulation itself is still a bottleneck. If frame generation takes too long, audio is necessarily going to lag behind
+    - Debug: 28ms per frame
+    - Release: 6ms per frame 
+    - Time for a `flamegraph`. Install via `cargo install flamegraph` and run via `cargo flamegraph --release`
+
+![](figures/33.png)
+
+- 75% of the runtime is spent inside the GPU clock function. I strongly suspect that the virtual dispatch from passing the cartridge as `dyn` is to blame - I risk I was aware of from the beginning. But I really dislike template syntax! So, let's see whether 6ms is good enough before optimising this. 
+
 ### Day 12: 19.04.2025
 - Clean-up! 
 
@@ -406,7 +429,7 @@ tests/               # Harte CPU tests
 ## Building
 
 - Local application for debugging: `cargo run`
-- WASM library for the web application:  `wasm-pack build --target web --out-dir docs/pkg`
+- WASM library for the web application:  `wasm-pack build --release --target web --out-dir docs/pkg`
 - Test the web application with `python -m http.server` and go to `http://localhost:8000/docs/` in your browser - I tested the application with Firefox
 - Tests: `cargo test --release -- --nocapture`
 

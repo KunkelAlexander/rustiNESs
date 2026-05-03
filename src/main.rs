@@ -135,7 +135,7 @@ fn main() -> std::io::Result<()> {
     output_name_table   (&emu, "output/name_table_before.txt")?;
     output_frame        (&emu, "output/frame_before.txt");
 
-    for frame in 0..100 {
+    for _ in 0..10000 {
         emu.run_frame();
     }
     
