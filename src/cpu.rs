@@ -363,7 +363,7 @@ pub struct Olc6502<C: BusInterface> {    // registers
     // debugging
     trace_enabled : bool,
 
-    //what is phantomData?
+    // what is phantomData?
     // PhantomData is a way to tell the compiler "this type parameter is logically used here, 
     // even though no field actually stores it.
     // We need it for the generic to compile

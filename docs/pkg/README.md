@@ -50,9 +50,19 @@ This project was written by hand as a learning exercise. I mainly used LLMs for 
         - We run the emulation for 1 frame
         - Push ~44100/60 = 735 samples to ring buffer
         - Audio worklet drains ring buffer independently
-        - *Result*: It get terrible-sounding buffer underruns. Audio is really a different beast. 
+        - *Result*: If the emulation takes too long, I get terrible-sounding buffer underruns. Even for 6ms per emulation frame, I get some crackling. Audio is really a different beast. 
+        
+    - **Approach 1.1**: 
+        - Frame loop fires every 1/60 = 16.7ms 
+        - We check the current state of the ring buffer 
+            - If there are too many samples, we skip a frame
+            - If there are not enough samples we run enough frames to fill it
+            - Every time, we push 44100/60 ~ 735 samples to ring buffer
+        - Audio worklet drains ring buffer independently
+        - *Result*: In general, this tends to work okay but is also not very robust. Sometimes, there are too many samples on the buffer when the audio system fails to empty it at start-up and the first seconds of the run are spent skipping frames to empty the buffer. 
+
     - **Approach 2**: 
-        - Audio worklet fires every 1/44100 = 2.9s
+        - Audio worklet fires every 1/44100 = 2.9ms
         - Reports buffer level back to main thread
         - Main thread checks buffer level
         - If buffer level is low, we run 2 frames of emulations and push 2x samples, 
@@ -71,7 +81,7 @@ This project was written by hand as a learning exercise. I mainly used LLMs for 
 ![](figures/33.png)
 
 - 75% of the runtime is spent inside the GPU clock function. I strongly suspect that the virtual dispatch from passing the cartridge as `dyn` is to blame - I risk I was aware of from the beginning. But I really dislike template syntax! So, let's see whether 6ms is good enough before optimising this. 
-
+- Well, it turns out that I really want to optimise this, but it's less ugly than expected. Turning the CPU class into a generic brings the runtime by 50% to 3ms per frame. Next, I will tackle the GPU, Cartridge and Mapper classes. 
 ### Day 12: 19.04.2025
 - Clean-up! 
 
