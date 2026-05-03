@@ -41,7 +41,7 @@ pub struct Bus<C: CartridgeInterface> {
     cpu_ram:              [u8; 2048],
     pub ppu:              Olc2c02<C>,
     pub apu:              Olc2A03,
-    pub cartridge:        Option<C>,
+    pub cartridge:        C,
     pub controller:       [u8; 2], // this needs to be set externally
     controller_state:     [u8; 2], // store snapshots of the inputs when the corresponding memory address is written to. 
 
@@ -55,12 +55,12 @@ pub struct Bus<C: CartridgeInterface> {
 }
 
 impl<C: CartridgeInterface> Bus<C> {
-    pub fn new() -> Self {
+    pub fn new(cartridge: C) -> Self {
         Self {
             cpu_ram:             [0; 2048],
             ppu:                 Olc2c02::new(),
             apu:                 Olc2A03::new(),
-            cartridge:           None,
+            cartridge:           cartridge,
             controller:          [0; 2],
             controller_state:    [0; 2],
             // DMA
@@ -81,11 +81,7 @@ impl<C: CartridgeInterface> Bus<C> {
 
     
     pub fn get_pattern_table(&self, i: u8, palette: u8) -> Vec<u8> {
-        if let Some(cart) = &self.cartridge {
-            self.ppu.get_pattern_table(i, palette, cart)
-        } else {
-        Vec::new()
-        }
+        self.ppu.get_pattern_table(i, palette, &self.cartridge)
     }
 
     pub fn get_name_table(&self) -> Vec<u8> {
@@ -95,10 +91,7 @@ impl<C: CartridgeInterface> Bus<C> {
     pub fn reset(&mut self) {
         self.apu.reset();
         self.ppu.reset(); 
-        // Reset cartridge if it exists
-        if let Some(cart) = &mut self.cartridge {
-            cart.reset();
-        }
+        self.cartridge.reset();
         
         self.dma_page     = 0x00;
         self.dma_addr     = 0x00;
@@ -108,19 +101,12 @@ impl<C: CartridgeInterface> Bus<C> {
     }
 
     pub fn clock(&mut self) {
-        
-        // Only clock if cartridge is inserted
-        // Is this correct NES behaviour?
-        // Probably not.
-        if let Some(cart) = &mut self.cartridge {
-            self.ppu.clock(cart);
-            self.apu.clock();
-        }
-        
+        self.ppu.clock(&mut self.cartridge);
+        self.apu.clock();
     }
 
     pub fn insert_cartridge(&mut self, cartridge: C) {
-        self.cartridge = Some(cartridge);
+        self.cartridge = cartridge;
     }
     
     pub fn set_controller(&mut self, i: usize, x: bool, z: bool, a: bool, s: bool, up: bool, down: bool, left: bool, right: bool) {
@@ -143,10 +129,8 @@ impl<C: CartridgeInterface> Bus<C> {
 impl<C: CartridgeInterface> BusInterface for Bus<C>  {
     fn read(&mut self, addr: u16, read_only: bool) -> u8 {
         // Cartridge gets first chance
-        if let Some(cart) = &mut self.cartridge {
-            if let Some(data) = cart.read_cpu(addr) {
-                return data;
-            }
+        if let Some(data) = self.cartridge.read_cpu(addr) {
+            return data;
         }
         // System RAM (mirrored every 2 KB)
         if addr <= 0x1FFF
@@ -156,9 +140,7 @@ impl<C: CartridgeInterface> BusInterface for Bus<C>  {
         // PPU Address range, mirrored every 8 bytes
         if addr >= 0x2000 && addr <= 0x3FFF
         {
-            if let Some(cart) = &mut self.cartridge {
-                self.ppu.read_cpu(addr & 0x0007, read_only, cart);
-            }
+            return self.ppu.read_cpu(addr & 0x0007, read_only, &mut self.cartridge);
         }
         // Read most significant bit of controller state via pop
         else if addr >= 0x4016 && addr <= 0x4017
@@ -171,23 +153,18 @@ impl<C: CartridgeInterface> BusInterface for Bus<C>  {
     }
     fn write(&mut self, addr: u16, data: u8) {
 
-        if let Some(cart) = &mut self.cartridge {
-            if cart.write_cpu(addr, data).is_some() {
-                return;
-            }
+        // Cartridge gets first chance
+        if self.cartridge.write_cpu(addr, data).is_some() {
         }
-
         // System RAM (mirrored every 2 KB)
-        if addr <= 0x1FFF
+        else if addr <= 0x1FFF
         {
            self.cpu_ram[(addr & 0x07FF) as usize] = data;
         }
         // PPU address range, mirrored every 8 bytes
         else if addr >= 0x2000 && addr <= 0x3FFF
         {
-            if let Some(cart) = &mut self.cartridge {
-                self.ppu.write_cpu(addr & 0x0007, data, cart);
-            }
+            self.ppu.write_cpu(addr & 0x0007, data, &mut self.cartridge);
         }
         // APU address range
         else if (addr >= 0x4000 && addr <= 0x4013) || addr == 0x4015 || addr == 0x4017 

@@ -17,7 +17,7 @@ impl Nes {
     pub fn new() -> Self {
         Self {
             cpu:                  Olc6502::new(),
-            bus:                  Bus::new(),
+            bus:                  Bus::new(Cartridge::new()),
             system_clock_counter: 0,
             audio_buffer: Vec::new(),
             sine_phase:   0.0,

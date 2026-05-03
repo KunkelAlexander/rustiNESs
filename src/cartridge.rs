@@ -35,6 +35,17 @@ pub struct Cartridge {
 
 impl Cartridge {
 
+    pub fn new() -> Self {
+        Self {
+            v_prg_memory: vec![0; 16384],  // 1 bank of PRG ROM
+            v_chr_memory: vec![0; 8192],   // 1 bank of CHR ROM
+            mirror:       MIRROR::Horizontal,
+            mapper:       Mapper::Mapper000(Mapper000 { 
+                prg_banks: 1, 
+                chr_banks: 1 
+            }),
+        }
+    }
     
     pub fn from_bytes(data: &[u8]) -> Result<Self, String> {
         if data.len() < 16 {
