@@ -18,13 +18,18 @@ export class NES {
         wasm.nes_cpu_clock(this.__wbg_ptr);
     }
     /**
-     * @returns {Uint8Array}
+     * @returns {number}
      */
-    frame() {
-        const ret = wasm.nes_frame(this.__wbg_ptr);
-        var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-        return v1;
+    frame_len() {
+        const ret = wasm.nes_frame_len(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * @returns {number}
+     */
+    frame_ptr() {
+        const ret = wasm.nes_frame_ptr(this.__wbg_ptr);
+        return ret >>> 0;
     }
     /**
      * @returns {Float32Array}

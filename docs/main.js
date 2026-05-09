@@ -10,6 +10,8 @@ let rafHandle  = null;
 let audioCtx   = null;
 let nesNode    = null;
 let audioBufferLevel = 0;
+let wasmMemory = null; 
+let frameView  = null;
 
 // "nes" | "cpu" | "fullscreen"
 let mode       = "nes";
@@ -172,17 +174,28 @@ function writeFrameToImageData(frame, imgData) {
   }
 }
 
+// This is a pointer to my emulator's memory
+function getFrameView() {
+  // Recreate only if memory grew (buffer was replaced)
+  if (frameView === null || frameView.buffer !== wasmMemory.buffer) {
+    frameView = new Uint8Array(
+      wasmMemory.buffer,
+      emu.frame_ptr(),
+      emu.frame_len()
+    );
+  }
+  return frameView;
+}
+
 function renderDebugFrame() {
   if (!emu || !ctx) return;
-  const frame = emu.frame();
-  writeFrameToImageData(frame, imageData);
+  writeFrameToImageData(getFrameView(), imageData);
   ctx.putImageData(imageData, 0, 0);
 }
 
 function renderFullscreenFrame() {
   if (!emu || !fsCtx) return;
-  const frame = emu.frame();
-  writeFrameToImageData(frame, fsImageData);
+  writeFrameToImageData(getFrameView(), fsImageData);
   fsCtx.putImageData(fsImageData, 0, 0);
 }
 
@@ -620,9 +633,6 @@ function bindUI() {
   // Touch buttons — wire all [data-btn] elements
   document.querySelectorAll("[data-btn]").forEach(wireTouchButton);
 
-  // Touch buttons — wire all [data-btn] elements
-  document.querySelectorAll("[data-btn]").forEach(wireTouchButton);
-
   // Note: no global pointerup → releaseAllButtons here.
   // Each touch button handles its own release via pointerup/pointercancel/
   // lostpointercapture on the element itself, so held keyboard keys are
@@ -884,7 +894,8 @@ function parseHexProgram(text) {
 async function boot() {
   try {
     setStatus(false, "Loading WASM…");
-    await init();
+    const wasm = await init();
+    wasmMemory = wasm.memory; // Get pointer to WASM memory so that I don't have the reallocate the frame buffer
 
     emu = new NES();
     setStatus(true, "WASM loaded");

@@ -123,8 +123,12 @@ impl Nes {
         Ok(())
     }
 
-    pub fn frame(&self) -> Vec<u8> {
+    pub fn frame_ptr(&self) -> *const u8 {
         self.bus.ppu.get_frame_buffer()
+    }
+
+    pub fn frame_len(&self) -> usize {
+        self.bus.ppu.get_frame_buffer_len()
     }
 
     pub fn step_instruction(&mut self) { 

@@ -43,8 +43,12 @@ impl NES {
         self.inner.insert_cartridge(cartridge_data)
     }
 
-    pub fn frame(&self) -> Vec<u8> {
-        self.inner.frame()
+    pub fn frame_ptr(&self) -> *const u8 {
+        self.inner.frame_ptr()
+    }
+
+    pub fn frame_len(&self) -> usize {
+        self.inner.frame_len()
     }
 
     pub fn step_instruction(&mut self) {

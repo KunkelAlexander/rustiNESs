@@ -6,7 +6,8 @@ export class NES {
     [Symbol.dispose](): void;
     clock(): void;
     cpu_clock(): void;
-    frame(): Uint8Array;
+    frame_len(): number;
+    frame_ptr(): number;
     get_audio_samples(): Float32Array;
     get_cpu_state(): Uint32Array;
     get_pattern_table(table: number, palette: number): Uint8Array;
@@ -28,7 +29,8 @@ export interface InitOutput {
     readonly __wbg_nes_free: (a: number, b: number) => void;
     readonly nes_clock: (a: number) => void;
     readonly nes_cpu_clock: (a: number) => void;
-    readonly nes_frame: (a: number) => [number, number];
+    readonly nes_frame_len: (a: number) => number;
+    readonly nes_frame_ptr: (a: number) => number;
     readonly nes_get_audio_samples: (a: number) => [number, number];
     readonly nes_get_cpu_state: (a: number) => [number, number];
     readonly nes_get_pattern_table: (a: number, b: number, c: number) => [number, number];

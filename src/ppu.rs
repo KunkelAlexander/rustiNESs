@@ -698,9 +698,14 @@ impl<C: CartridgeInterface> Olc2c02<C> {
     }
 
 
-    pub fn get_frame_buffer(&self) -> Vec<u8> {
-        self.screen.to_vec()
+    pub fn get_frame_buffer(&self) -> *const u8 {
+        self.screen.as_ptr()
     }
+
+    pub fn get_frame_buffer_len(&self) -> usize { 
+        self.screen.len()
+    }
+
 
     // Depending on the increment mode flag, we either move horizontally (1 tile) or vertically (skip 32 tiles horizontally)
     fn ppu_addr_increment(&self) -> u16 {
