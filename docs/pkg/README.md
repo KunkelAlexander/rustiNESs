@@ -81,7 +81,8 @@ This project was written by hand as a learning exercise. I mainly used LLMs for 
 ![](figures/33.png)
 
 - 75% of the runtime is spent inside the GPU clock function. I strongly suspect that the virtual dispatch from passing the cartridge as `dyn` is to blame - I risk I was aware of from the beginning. But I really dislike template syntax! So, let's see whether 6ms is good enough before optimising this. 
-- Well, it turns out that I really want to optimise this, but it's less ugly than expected. Turning the CPU class into a generic brings the runtime by 50% to 3ms per frame. Next, I will tackle the GPU, Cartridge and Mapper classes. 
+- Well, it turns out that I really want to optimise this, but it's less ugly than expected. Turning the CPU class into a generic brings the runtime by 33% to 4ms per frame. I also tried to optimise the GPU and Cartridge but that was a waste of time. Anyway, this needs to be enough or I just won't have sound. 
+
 ### Day 12: 19.04.2025
 - Clean-up! 
 
