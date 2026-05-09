@@ -236,6 +236,8 @@ async function initAudio() {
   `], { type: "application/javascript" });
 
   audioCtx = new AudioContext({ sampleRate: 44100 });
+  console.log("actual sampleRate:", audioCtx.sampleRate);  // add this
+
   await audioCtx.audioWorklet.addModule(URL.createObjectURL(blob));
   nesNode = new AudioWorkletNode(audioCtx, "nes-processor");
   nesNode.connect(audioCtx.destination);

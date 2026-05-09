@@ -165,14 +165,13 @@ impl Olc2A03 {
 
             
             // The binary output of the sequencer sounds terrible
-            self.pulse1_sample = self.pulse1_sequence.clock(self.pulse1_enable) as f32; 
+            //self.pulse1_sample = self.pulse1_sequence.clock(self.pulse1_enable) as f32; 
 
-            //self.pulse1_osc.frequency = 1789773. / (16. * ((self.pulse1_sequence.reload as f32) + 1.));
-            //self.pulse1_sample        = self.pulse1_osc.sample(self.global_time as f32); 
-            self.clock_counter        = self.clock_counter.wrapping_add(1);
+            self.pulse1_osc.frequency = 1789773. / (16. * ((self.pulse1_sequence.reload as f32) + 1.));
+            self.pulse1_sample        = self.pulse1_osc.sample(self.global_time as f32); 
         }
 
-
+        self.clock_counter        = self.clock_counter.wrapping_add(1);
     }
 
     
