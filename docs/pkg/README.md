@@ -75,13 +75,15 @@ This project was written by hand as a learning exercise. I mainly used LLMs for 
         - This is called synchronising to sound
 - Actually, I realised that the performance of the emulation itself is still a bottleneck. If frame generation takes too long, audio is necessarily going to lag behind
     - Debug: 28ms per frame
-    - Release: 6ms per frame 
+    - Release: 4ms per frame 
     - Time for a `flamegraph`. Install via `cargo install flamegraph` and run via `cargo flamegraph --release`
 
 ![](figures/33.png)
 
 - 75% of the runtime is spent inside the GPU clock function. I strongly suspect that the virtual dispatch from passing the cartridge as `dyn` is to blame - I risk I was aware of from the beginning. But I really dislike template syntax! So, let's see whether 6ms is good enough before optimising this. 
-- Well, it turns out that I really want to optimise this, but it's less ugly than expected. Turning the CPU class into a generic brings the runtime by 33% to 4ms per frame. I also tried to optimise the GPU and Cartridge but that was a waste of time. Anyway, this needs to be enough or I just won't have sound. 
+- Well, it turns out that I really want to optimise this, but it's less ugly than expected. Turning the CPU class into a generic brings the runtime 3ms per frame. I also tried to optimise the GPU and Cartridge by removing generics and that seems to have brought down the runtime to a little less than 3ms per frame. 
+
+- Most time is still spent inside the GPU clock function - probably the pixel-by-pixel 
 
 ### Day 12: 19.04.2025
 - Clean-up! 

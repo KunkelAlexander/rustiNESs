@@ -27,7 +27,7 @@ impl Loopy {
     fn set_fine_y      (&mut self, v: u8) { self.addr = (self.addr & !(0x07 << 12)) | ((v as u16) << 12); }
 
     fn to_u16(&self) -> u16 { self.addr }                    // was 5 loads + 5 shifts + 4 ORs
-    fn from_u16(v: u16) -> Self { Loopy {addr: v} }              // was 5 stores
+    fn from_u16(v: u16) -> Self { Loopy {addr: v} }          // was 5 stores
 }
 
 #[derive(Copy, Clone, Default)]
@@ -225,93 +225,7 @@ impl<C: CartridgeInterface> Olc2c02<C> {
         }
     }
 
-    pub fn set_pixel(&mut self, x: usize, y: usize, colour: u8) {
-        self.screen[y * SCREEN_W + x] = colour;
-    }
-
-	// Increment the background tile "pointer" one tile/column horizontally
-    fn increment_scroll_x(&mut self) {
-        if (self.mask & MASK_RENDER_BACKGROUND != 0) || (self.mask & MASK_RENDER_SPRITES != 0) {
-            if self.vram_addr.coarse_x() == 31 {
-                self.vram_addr.set_coarse_x(0);
-                self.vram_addr.set_nametable_x(self.vram_addr.nametable_x() ^ 1);
-            } else {
-                self.vram_addr.set_coarse_x(self.vram_addr.coarse_x() + 1);
-            }
-        }
-    }
-
-	// Increment the background tile "pointer" one scanline vertically
-    fn increment_scroll_y(&mut self) {
-        if (self.mask & MASK_RENDER_BACKGROUND != 0) || (self.mask & MASK_RENDER_SPRITES != 0) {
-            if self.vram_addr.fine_y() < 7 {
-                self.vram_addr.set_fine_y(self.vram_addr.fine_y() + 1);
-            } else {
-                self.vram_addr.set_fine_y(0);
-
-                if self.vram_addr.coarse_y() == 29 {
-                    self.vram_addr.set_coarse_y(0);
-                    self.vram_addr.set_nametable_y(self.vram_addr.nametable_y() ^ 1);
-                } else if self.vram_addr.coarse_y() == 31 {
-                    self.vram_addr.set_coarse_y(0);
-                } else {
-                    self.vram_addr.set_coarse_y(self.vram_addr.coarse_y() + 1);
-                }
-            }
-        }
-    }
-
-    // Transfer temporarily stored horizontal nametable access information into the main pointer
-    fn transfer_address_x(&mut self) {
-        if (self.mask & MASK_RENDER_BACKGROUND != 0) || (self.mask & MASK_RENDER_SPRITES != 0) {
-            self.vram_addr.set_nametable_x(self.tram_addr.nametable_x());
-            self.vram_addr.set_coarse_x   (self.tram_addr.coarse_x());
-        }
-    }
-
-    // Transfer temporarily stored vertical nametable access information into the main pointer
-    fn transfer_address_y(&mut self) {
-        if (self.mask & MASK_RENDER_BACKGROUND != 0) || (self.mask & MASK_RENDER_SPRITES != 0) {
-            self.vram_addr.set_nametable_y(self.tram_addr.nametable_y());
-            self.vram_addr.set_coarse_y   (self.tram_addr.coarse_y());
-            self.vram_addr.set_fine_y     (self.tram_addr.fine_y());
-        }
-    }
-
-    // Prepare the background tile shifters for outputting next 8 pixels in scanline
-    fn load_background_shifters(&mut self) {
-		self.bg_shifter_pattern_lo = (self.bg_shifter_pattern_lo & 0xFF00) | self.bg_next_tile_lsb as u16;
-		self.bg_shifter_pattern_hi = (self.bg_shifter_pattern_hi & 0xFF00) | self.bg_next_tile_msb as u16;
-		self.bg_shifter_attrib_lo  = (self.bg_shifter_attrib_lo  & 0xFF00) | if (self.bg_next_tile_attrib & 0b01) != 0 { 0x00FF } else { 0x0000 };
-		self.bg_shifter_attrib_hi  = (self.bg_shifter_attrib_hi  & 0xFF00) | if (self.bg_next_tile_attrib & 0b10) != 0 { 0x00FF } else { 0x0000 };
-    }
-
     
-    // Every caycle the shifters shift their contents by 1 bit because the output progresses by 1 pixel
-    fn update_shifters(&mut self) {
-        if self.mask & MASK_RENDER_BACKGROUND != 0 {
-            self.bg_shifter_pattern_lo <<= 1;
-            self.bg_shifter_pattern_hi <<= 1;
-            self.bg_shifter_attrib_lo  <<= 1;
-            self.bg_shifter_attrib_hi  <<= 1;
-        }
-
-        // We want to detect when the scanline collides with the sprite
-        // To do so, we decrement the sprite's x position every cycle 
-        // One x = 0, we know that the scanline has reached it and that it should be rendered
-        if (self.mask & MASK_RENDER_SPRITES != 0) && self.cycle >= 1 && self.cycle < 258 {
-            for i in 0u8..self.sprite_count {
-                let sprite = &mut self.sprite_scanline.sprites[i as usize]; 
-                if sprite.x > 0 {
-                    sprite.x -= 1; 
-                } else {
-                    self.sp_shifter_pattern_lo[i as usize] <<= 1;
-                    self.sp_shifter_pattern_hi[i as usize] <<= 1;
-                }
-            }
-        }
-    }
-
     
     // This advances the PPU
     // Visible scanlines: 0 ... 239 
@@ -391,6 +305,96 @@ impl<C: CartridgeInterface> Olc2c02<C> {
         }
     }
 
+    
+    
+    pub fn set_pixel(&mut self, x: usize, y: usize, colour: u8) {
+        self.screen[y * SCREEN_W + x] = colour;
+    }
+
+	// Increment the background tile "pointer" one tile/column horizontally
+    fn increment_scroll_x(&mut self) {
+        if (self.mask & MASK_RENDER_BACKGROUND != 0) || (self.mask & MASK_RENDER_SPRITES != 0) {
+            if self.vram_addr.coarse_x() == 31 {
+                self.vram_addr.set_coarse_x(0);
+                self.vram_addr.set_nametable_x(self.vram_addr.nametable_x() ^ 1);
+            } else {
+                self.vram_addr.set_coarse_x(self.vram_addr.coarse_x() + 1);
+            }
+        }
+    }
+
+	// Increment the background tile "pointer" one scanline vertically
+    fn increment_scroll_y(&mut self) {
+        if (self.mask & MASK_RENDER_BACKGROUND != 0) || (self.mask & MASK_RENDER_SPRITES != 0) {
+            if self.vram_addr.fine_y() < 7 {
+                self.vram_addr.set_fine_y(self.vram_addr.fine_y() + 1);
+            } else {
+                self.vram_addr.set_fine_y(0);
+
+                if self.vram_addr.coarse_y() == 29 {
+                    self.vram_addr.set_coarse_y(0);
+                    self.vram_addr.set_nametable_y(self.vram_addr.nametable_y() ^ 1);
+                } else if self.vram_addr.coarse_y() == 31 {
+                    self.vram_addr.set_coarse_y(0);
+                } else {
+                    self.vram_addr.set_coarse_y(self.vram_addr.coarse_y() + 1);
+                }
+            }
+        }
+    }
+
+    // Transfer temporarily stored horizontal nametable access information into the main pointer
+    fn transfer_address_x(&mut self) {
+        if (self.mask & MASK_RENDER_BACKGROUND != 0) || (self.mask & MASK_RENDER_SPRITES != 0) {
+            self.vram_addr.set_nametable_x(self.tram_addr.nametable_x());
+            self.vram_addr.set_coarse_x   (self.tram_addr.coarse_x());
+        }
+    }
+
+    // Transfer temporarily stored vertical nametable access information into the main pointer
+    fn transfer_address_y(&mut self) {
+        if (self.mask & MASK_RENDER_BACKGROUND != 0) || (self.mask & MASK_RENDER_SPRITES != 0) {
+            self.vram_addr.set_nametable_y(self.tram_addr.nametable_y());
+            self.vram_addr.set_coarse_y   (self.tram_addr.coarse_y());
+            self.vram_addr.set_fine_y     (self.tram_addr.fine_y());
+        }
+    }
+
+    // Prepare the background tile shifters for outputting next 8 pixels in scanline
+    fn load_background_shifters(&mut self) {
+		self.bg_shifter_pattern_lo = (self.bg_shifter_pattern_lo & 0xFF00) | self.bg_next_tile_lsb as u16;
+		self.bg_shifter_pattern_hi = (self.bg_shifter_pattern_hi & 0xFF00) | self.bg_next_tile_msb as u16;
+		self.bg_shifter_attrib_lo  = (self.bg_shifter_attrib_lo  & 0xFF00) | if (self.bg_next_tile_attrib & 0b01) != 0 { 0x00FF } else { 0x0000 };
+		self.bg_shifter_attrib_hi  = (self.bg_shifter_attrib_hi  & 0xFF00) | if (self.bg_next_tile_attrib & 0b10) != 0 { 0x00FF } else { 0x0000 };
+    }
+
+    
+    // Every cycle the shifters shift their contents by 1 bit because the output progresses by 1 pixel
+    fn update_shifters(&mut self) {
+        if self.mask & MASK_RENDER_BACKGROUND != 0 {
+            self.bg_shifter_pattern_lo <<= 1;
+            self.bg_shifter_pattern_hi <<= 1;
+            self.bg_shifter_attrib_lo  <<= 1;
+            self.bg_shifter_attrib_hi  <<= 1;
+        }
+
+        // We want to detect when the scanline collides with the sprite
+        // To do so, we decrement the sprite's x position every cycle 
+        // One x = 0, we know that the scanline has reached it and that it should be rendered
+        if (self.mask & MASK_RENDER_SPRITES != 0) && self.cycle >= 1 && self.cycle < 258 {
+            for i in 0u8..self.sprite_count {
+                let sprite = &mut self.sprite_scanline.sprites[i as usize]; 
+                if sprite.x > 0 {
+                    sprite.x -= 1; 
+                } else {
+                    self.sp_shifter_pattern_lo[i as usize] <<= 1;
+                    self.sp_shifter_pattern_hi[i as usize] <<= 1;
+                }
+            }
+        }
+    }
+
+    
     #[inline(never)]
     fn fetch_background_tile(&mut self, cartridge: &mut C) {
         self.update_shifters();
@@ -647,7 +651,7 @@ impl<C: CartridgeInterface> Olc2c02<C> {
 
 
         // Combine background and foreground pixel
-        let mut pixel: u8 = 0x00;
+        let mut pixel:   u8 = 0x00;
         let mut palette: u8 = 0x00;
 
         if bg_pixel == 0 && fg_pixel == 0 {
@@ -672,7 +676,7 @@ impl<C: CartridgeInterface> Olc2c02<C> {
                 if ((self.mask & MASK_RENDER_BACKGROUND) != 0) && ((self.mask & MASK_RENDER_SPRITES) != 0) {
                     let left_edge_enabled =
                         (self.mask & MASK_RENDER_BACKGROUND_LEFT) != 0 &&
-                        (self.mask & MASK_RENDER_SPRITES_LEFT) != 0;
+                        (self.mask & MASK_RENDER_SPRITES_LEFT)    != 0;
 
                     if !left_edge_enabled {
                         if self.cycle >= 9 && self.cycle < 258 {
@@ -692,6 +696,7 @@ impl<C: CartridgeInterface> Olc2c02<C> {
 
         self.set_pixel((self.cycle - 1) as usize, self.scanline as usize, colour);
     }
+
 
     pub fn get_frame_buffer(&self) -> Vec<u8> {
         self.screen.to_vec()
