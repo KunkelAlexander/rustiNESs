@@ -106,6 +106,10 @@ pub struct Olc2A03 {
     pulse1_sample:       f32,
     pulse1_sequence:     Sequencer, 
     pulse1_osc:          OscillatorPulse,
+    pulse2_enable:       bool, 
+    pulse2_sample:       f32,
+    pulse2_sequence:     Sequencer, 
+    pulse2_osc:          OscillatorPulse,
     clock_counter:       u32, 
     frame_clock_counter: u32, 
     global_time:         f64,
@@ -119,6 +123,10 @@ impl Olc2A03 {
             pulse1_sample:       0.0,
             pulse1_sequence:     Sequencer::new(SequencerKind::Pulse), 
             pulse1_osc:          OscillatorPulse::new(),
+            pulse2_enable:       true, 
+            pulse2_sample:       0.0,
+            pulse2_sequence:     Sequencer::new(SequencerKind::Pulse), 
+            pulse2_osc:          OscillatorPulse::new(),
             clock_counter:       0, 
             frame_clock_counter: 0, 
             global_time:         0.0
@@ -169,6 +177,10 @@ impl Olc2A03 {
 
             self.pulse1_osc.frequency = 1789773. / (16. * ((self.pulse1_sequence.reload as f32) + 1.));
             self.pulse1_sample        = self.pulse1_osc.sample(self.global_time as f32); 
+
+            
+            self.pulse2_osc.frequency = 1789773. / (16. * ((self.pulse2_sequence.reload as f32) + 1.));
+            self.pulse2_sample        = self.pulse2_osc.sample(self.global_time as f32); 
         }
 
         self.clock_counter        = self.clock_counter.wrapping_add(1);
@@ -189,7 +201,7 @@ impl Olc2A03 {
 
     // Perform the mixing
     pub fn get_output_sample(&self) -> f32 {
-        self.pulse1_sample as f32
+        (self.pulse1_sample + self.pulse2_sample) as f32
     }
 }
 
@@ -227,16 +239,31 @@ impl ApuInterface for Olc2A03 {
                 self.pulse1_sequence.reload = (self.pulse1_sequence.reload & 0x00FF) | (((data & 0x07) as u16) << 8);
                 self.pulse1_sequence.timer  = self.pulse1_sequence.reload;
             }, 
-            0x4004 => {}, 
+            // Set duty cycle of channel 2's pulse wave form
+            0x4004 =>  {
+                match (data & 0xC0) >> 6 {
+                    0x00 => {self.pulse2_sequence.sequence = 0b00000001; self.pulse2_osc.duty_cycle = 0.125;},
+                    0x01 => {self.pulse2_sequence.sequence = 0b00000011; self.pulse2_osc.duty_cycle = 0.250;},
+                    0x02 => {self.pulse2_sequence.sequence = 0b00001111; self.pulse2_osc.duty_cycle = 0.500;},
+                    0x03 => {self.pulse2_sequence.sequence = 0b11111100; self.pulse2_osc.duty_cycle = 0.750;},
+                    _    => {}
+                }
+            }
             0x4005 => {}, 
-            0x4006 => {}, 
-            0x4007 => {}, 
+            0x4006 => {
+                self.pulse2_sequence.reload = (self.pulse2_sequence.reload & 0xFF00) | data as u16;
+            }, 
+            0x4007 => {
+                self.pulse2_sequence.reload = (self.pulse2_sequence.reload & 0x00FF) | (((data & 0x07) as u16) << 8);
+                self.pulse2_sequence.timer  = self.pulse2_sequence.reload;
+            }, 
             0x4008 => {}, 
             0x400C => {}, 
             0x400E => {}, 
             // Enable and disable pulse 1 sequencer
             0x4015 => {
                 self.pulse1_enable = (data & 0x01) != 0;
+                self.pulse2_enable = (data & 0x01) != 0;
             }, 
             0x400F => {}, 
             _      => {},
