@@ -177,8 +177,14 @@ impl Olc2A03 {
     
 
 
-    pub fn reset(&self) {
-
+    pub fn reset(&mut self) {
+        self.pulse1_enable       = true;
+        self.pulse1_sample       = 0.0;
+        self.pulse1_sequence     = Sequencer::new(SequencerKind::Pulse);
+        self.pulse1_osc          = OscillatorPulse::new();
+        self.clock_counter       = 0;
+        self.frame_clock_counter = 0;
+        self.global_time         = 0.0;
     }
 
     // Perform the mixing
