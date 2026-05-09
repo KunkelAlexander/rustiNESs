@@ -13,106 +13,7 @@ use std::fs;
 use std::io::{Write, BufWriter};
 
 
-fn output_pattern_table(emu: &Nes, path: &str) -> std::io::Result<()> {
-    //get pattern table (table 0, palette 0 for example)
-    let pattern = emu.get_pattern_table(0, 0);
-    
-    println!("Pattern table generated: {} bytes", pattern.len());
-    
-    let width = 128;
-    let height = 128;
-    
-    assert_eq!(pattern.len(), width * height);
-    
-    let file = fs::File::create(path)?;
-    let mut writer = BufWriter::new(file);
-    
-    for y in 0..height {
-        for x in 0..width {
-            let val = pattern[y * width + x];
-            write!(writer, "{:3} ", val)?; // padded for alignment
-        }
-        writeln!(writer)?;
-    }
-    
-    println!("Wrote {}", path);
-    
-    Ok(())
-}
-
-
-fn output_name_table(emu: &Nes, path: &str) -> std::io::Result<()> {
-    let name_table = emu.get_name_table();
-
-    println!("Name table generated: {} bytes", name_table.len());
-    assert_eq!(name_table.len(), 1024);
-
-    let file = fs::File::create(path)?;
-    let mut writer = BufWriter::new(file);
-
-    writeln!(writer, "=== NAMETABLE DUMP ===")?;
-    writeln!(writer, "Total bytes: {}", name_table.len())?;
-    writeln!(writer)?;
-
-    // First 960 bytes: tile IDs, arranged as 32x30
-    writeln!(writer, "--- Tile indices (32x30) ---")?;
-    for y in 0..30 {
-        for x in 0..32 {
-            let idx = y * 32 + x;
-            let val = name_table[idx];
-            write!(writer, "{:02X} ", val)?;
-        }
-        writeln!(writer)?;
-    }
-
-    writeln!(writer)?;
-    writeln!(writer, "--- Attribute table (8x8 bytes) ---")?;
-
-    // Last 64 bytes: attribute table
-    for y in 0..8 {
-        for x in 0..8 {
-            let idx = 960 + y * 8 + x;
-            let val = name_table[idx];
-            write!(writer, "{:02X} ", val)?;
-        }
-        writeln!(writer)?;
-    }
-
-    println!("Wrote {}", path);
-    Ok(())
-}
-
-fn output_frame(emu: &Nes, path: &str) -> std::io::Result<()>  {
-    let frame = emu.frame();
-    let width = 256;
-    let height = 240;
-
-    let charset = [' ', '.', ':', '-', '=', '+', '*', '#', '%', '@'];
-
-    let scale_x = 4;
-    let scale_y = 4;
-
-    let file = fs::File::create(path)?;
-    let mut writer = BufWriter::new(file);
-
-    for y in (0..height).step_by(scale_y) {
-        for x in (0..width).step_by(scale_x) {
-            let val = frame[y * width + x] as usize;
-
-            let idx = val * (charset.len() - 1) / 63;
-            write!(writer, "{}", charset[idx])?;
-        }
-        writeln!(writer)?; // newline
-    }
-
-
-    println!("Saved ASCII frame to {}", path);
-    Ok(())
-}
-
-
 fn main() -> std::io::Result<()> {
-    // adjust this path to your Downloads folder
     let rom_path = r"roms/dk.nes";
 
     // read file into bytes
@@ -125,17 +26,9 @@ fn main() -> std::io::Result<()> {
     emu.insert_cartridge(&bytes).expect("failed to load ROM");
     emu.reset();
 
-    
-    println!("Loaded ROM");
-
-    // Dump before running
-    output_pattern_table(&emu, "output/pattern_table_before.txt")?;
-    output_name_table   (&emu, "output/name_table_before.txt")?;
-    output_frame        (&emu, "output/frame_before.txt")?;
 
     use std::time::Instant;
 
-    // Also print average
     let t0 = Instant::now();
     for _ in 0..10000 {
         emu.run_frame();
@@ -143,10 +36,5 @@ fn main() -> std::io::Result<()> {
     let avg = t0.elapsed().as_secs_f64() * 1000.0 / 10000.0;
     println!("avg over 10,000 frames: {:.2}ms", avg);
     
-    // Dump after running
-    output_pattern_table(&emu, "output/pattern_table_after.txt")?;
-    output_name_table   (&emu, "output/name_table_after.txt")?;
-    output_frame        (&emu, "output/frame_after.txt")?;
-
     Ok(())
 }
