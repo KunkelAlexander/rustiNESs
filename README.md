@@ -29,6 +29,15 @@ This project was written by hand as a learning exercise. I mainly used LLMs for 
 ## Devlog
 
 
+### Day 14: 09.05.2025
+
+- Sequencer counts down if it is enabled and clocked, we then do something 
+- Suppose we have a 8-bit word representing a 50%-duty cycle
+- The sequencer could output 0's and 1's that way
+- Sequencer for the pulse wave channel sets a frequency and a duty cycle
+
+![](figures/34.png)
+
 ### Day 13: 01.05.2025
 - Watch [NES Emulator Part #6: APU - Sounds, Beeps & Bloops](https://www.youtube.com/watch?v=72dI7dB3ZvQ)
 - Sound is unforgiving - we need to make sure that the timing is perfect
@@ -76,14 +85,28 @@ This project was written by hand as a learning exercise. I mainly used LLMs for 
 - Actually, I realised that the performance of the emulation itself is still a bottleneck. If frame generation takes too long, audio is necessarily going to lag behind
     - Debug: 28ms per frame
     - Release: 4ms per frame 
-    - Time for a `flamegraph`. Install via `cargo install flamegraph` and run via `cargo flamegraph --release`
 
-![](figures/33.png)
+- Time for profiling using `samply record .\target\release\nes_cli.exe `
 
-- 75% of the runtime is spent inside the GPU clock function. I strongly suspect that the virtual dispatch from passing the cartridge as `dyn` is to blame - I risk I was aware of from the beginning. But I really dislike template syntax! So, let's see whether 6ms is good enough before optimising this. 
-- Well, it turns out that I really want to optimise this, but it's less ugly than expected. Turning the CPU class into a generic brings the runtime 3ms per frame. I also tried to optimise the GPU and Cartridge by removing generics and that seems to have brought down the runtime to a little less than 3ms per frame. 
+- 80% of the runtime is spent inside the GPU clock function
+- After switching to generics for static dispatch and rewriting the Loopy structure, I observe the following improvement
 
-- Most time is still spent inside the GPUT clock function. First, I rewrite the loopy function. 
+| Function | Before abs. time | Before rel. time | After abs. time | After rel. time |
+|---|---:|---:|---:|---:|
+| `ppu::Olc2C02::clock` | 30.064 | 79% | 23.109 | 80% |
+| `ppu::Olc2C02::get_colour_from_palette_ram` | 5.609 | 15% | — | — |
+| `ppu::impl::read_ppu` | 2.768 | 7.2% | — | — |
+| `ppu::Olc2C02::update_shifters` | 2.185 | 5.7% | — | — |
+| `ppu::Olc2C02::compose_pixel` | — | — | 8.763 | 30% |
+| `ppu::Olc2C02::fetch_background_tile` | — | — | 7.635 | 26% |
+| `ppu::Olc2C02::load_background_shifters` | 450 | 1.2% | 23 | 0.1% |
+| `ppu::Olc2C02::get_pixel` | 298 | 0.8% | — | — |
+| `ppu::Olc2C02::increment_scroll_x` | 217 | 0.6% | 31 | 0.1% |
+| `ppu::Olc2C02::increment_scroll_y` | 34 | 0.1% | 1 | 0.0% |
+| `cpu::Olc6502::clock` | 5.611 | 15% | 3.627 | 13% |
+
+- `read_ppu` and `get_colour_from_palette_ram` do not take any time anymore which explains the 7 ms performance gain (10,000 frames). I also broke down the clock function into `compose_pixel` and `fetch_background_tile`. This leads me to believe that the root evil are still all the pixel-wise operations. 
+- With the help of my friend Claude Code, I verified that scanline-by-scanline operations could get us below 2 ms per frame, but I don't really like the idea. So, let's stick with the current performance of around 3 ms per frame. 
 
 ### Day 12: 19.04.2025
 - Clean-up! 

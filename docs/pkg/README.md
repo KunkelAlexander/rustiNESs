@@ -81,9 +81,9 @@ This project was written by hand as a learning exercise. I mainly used LLMs for 
 ![](figures/33.png)
 
 - 75% of the runtime is spent inside the GPU clock function. I strongly suspect that the virtual dispatch from passing the cartridge as `dyn` is to blame - I risk I was aware of from the beginning. But I really dislike template syntax! So, let's see whether 6ms is good enough before optimising this. 
-- Well, it turns out that I really want to optimise this, but it's less ugly than expected. Turning the CPU class into a generic brings the runtime 3ms per frame. I also tried to optimise the GPU and Cartridge by removing generics and that seems to have brought down the runtime to a little less than 3ms per frame. 
+- Well, it turns out that I really want to optimise this, but it's less ugly than expected. Turning the CPU class into a generic brings the runtime 3ms per frame. I also tried to optimise the GPU and Cartridge by removing generics and that seems to have brought down the runtime to a little less than 3 ms per frame. 
 
-- Most time is still spent inside the GPU clock function - probably the pixel-by-pixel 
+- Most time is still spent inside the GPU clock function. I rewrote the Loopy structure and got a small performance gain, but the root evil are all the pixel-wise operations. With the help of my friend Claude Code, I verified that scanline-by-scanline operations could get us below 2 ms per frame, but I don't really like the idea. So, let's stick with the current performance of around 3 ms per frame. 
 
 ### Day 12: 19.04.2025
 - Clean-up! 
