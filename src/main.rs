@@ -10,8 +10,6 @@ pub mod nes;
 pub use nes::Nes;
 
 use std::fs;
-use std::io::{Write, BufWriter};
-
 
 fn main() -> std::io::Result<()> {
     let rom_path = r"roms/dk.nes";
