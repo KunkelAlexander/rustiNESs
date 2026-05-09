@@ -245,8 +245,17 @@ async function initAudio() {
 //  Three independent loops: cpu-debug, nes-debug, nes-fullscreen
 // ═══════════════════════════════════════════════════════
 
-// Instead of fixed TARGET/MAX, track time debt
-let lastTime = null;
+// Audio-clock-driven sync state
+const NES_FPS         = 60.0988;   // NTSC
+let audioClockStart   = null;      // audioCtx.currentTime snapshot at loop start
+let emuFramesProduced = 0;         // frames run since audioClockStart was set
+
+// Debug counters for fullscreen loop
+let dbg_rafCount      = 0;
+let dbg_fpsTimestamp  = 0;
+let dbg_fps           = 0;
+let dbg_framesThisTick = 0;
+let dbg_driftMax      = 0;
 
 function frame() {
   if (!running) return;
@@ -264,24 +273,46 @@ function frame() {
       updateDebugUI();
 
     } else if (mode === "fullscreen") {
-      //const TARGET = 3675;
-      //const MAX    = 7350;
-//
-      //if (audioBufferLevel < MAX) {
-      //  if (audioBufferLevel < TARGET) {
-      //    emu.run_frame();
-      //    nesNode.port.postMessage(emu.get_audio_samples());
-      //  }
-      //  emu.run_frame();
-      //  nesNode.port.postMessage(emu.get_audio_samples());
-      //}
-//
-      //// Debug — remove once stable
-      //console.log(`buf: ${audioBufferLevel} | ${
-      //  audioBufferLevel < TARGET ? "CATCHUP" :
-      //  audioBufferLevel >= MAX   ? "SKIP" : "normal"
-      //}`);
-      emu.run_frame();
+      const hasAudio = !!nesNode && !!audioCtx;
+
+      dbg_rafCount++;
+      if (dbg_rafCount === 1) dbg_fpsTimestamp = performance.now();
+
+      // Determine how many NES frames to run this tick
+      let framesToRun;
+      if (hasAudio) {
+        // Anchor clock on first tick after entering fullscreen
+        if (audioClockStart === null) {
+          audioClockStart = audioCtx.currentTime;
+          emuFramesProduced = 0;
+        }
+        const drift = (audioCtx.currentTime - audioClockStart) * NES_FPS - emuFramesProduced;
+        framesToRun = Math.max(0, Math.min(Math.round(drift), 3));
+        dbg_driftMax = Math.max(dbg_driftMax, drift);
+      } else {
+        framesToRun = 1;
+      }
+
+      dbg_framesThisTick = framesToRun;
+      for (let i = 0; i < framesToRun; i++) {
+        emu.run_frame();
+        if (hasAudio) nesNode.port.postMessage(emu.get_audio_samples());
+        emuFramesProduced++;
+      }
+
+      // Log once per second (~60 RAF ticks)
+      if (dbg_rafCount % 60 === 0) {
+        const now = performance.now();
+        dbg_fps = Math.round(60000 / (now - dbg_fpsTimestamp));
+        dbg_fpsTimestamp = now;
+        console.log(
+          `[NES] fps=${dbg_fps} | frames/RAF=${dbg_framesThisTick}` +
+          (hasAudio
+            ? ` | drift_max=${dbg_driftMax.toFixed(2)} | t=${audioCtx.currentTime.toFixed(2)}s`
+            : " | no-audio")
+        );
+        dbg_driftMax = 0;
+      }
 
       renderFullscreenFrame();
     }
@@ -402,7 +433,10 @@ async function enterFullscreen() {
     // Browser denied (e.g. iframe sandbox) — overlay already visible, carry on.
     log(`Native fullscreen unavailable: ${e.message ?? e}`);
   }
-  if (audioCtx?.state === "suspended") await audioCtx.resume()
+  if (audioCtx?.state === "suspended") await audioCtx.resume();
+  // Let the first RAF tick anchor the clock; avoids catch-up after a pause
+  audioClockStart = null;
+  dbg_rafCount    = 0;
   $("fsScreen")?.focus();
   startRun();
   log("Entered fullscreen mode");
@@ -839,7 +873,7 @@ async function boot() {
 
     bindUI();
     initCanvas();
-    //await initAudio();
+    await initAudio();
     updateDebugUI();
 
     log("Emulator ready");

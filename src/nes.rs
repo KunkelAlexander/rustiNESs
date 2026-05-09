@@ -13,6 +13,15 @@ pub struct Nes {
     sine_phase:   f64,
 }
 
+
+// For sound, we need to worry about the timing a little more: 
+// ~5,369,318 system clocks per frame (NTSC)
+// ÷ 3 = ~1,789,773 CPU clocks per second
+// ÷ 60 = ~29,830 CPU clocks per frame
+// ÷ 44100 Hz = ~40.6 system clocks per audio sample
+const CLOCKS_PER_SAMPLE: u32 = 41; // ~1,789,773 / 44100
+
+
 impl Nes {
     pub fn new() -> Self {
         Self {
@@ -23,6 +32,8 @@ impl Nes {
             sine_phase:   0.0,
         }
     }
+
+    // This is a dummy method for testing
     pub fn generate_audio_frame(&mut self) {
         for _ in 0..735 {
             self.audio_buffer.push((self.sine_phase * std::f64::consts::TAU).sin() as f32 * 0.3);
@@ -94,7 +105,12 @@ impl Nes {
 
     pub fn run_frame(&mut self) {
         while !self.bus.ppu.frame_complete {
-            self.clock();  // advances PPU + CPU timing
+            self.clock();  // advances APU + PPU + CPU timing
+
+            
+            if self.system_clock_counter % CLOCKS_PER_SAMPLE == 0 {
+                self.audio_buffer.push(self.bus.apu.get_output_sample());
+            }
         }
 
         self.bus.ppu.frame_complete = false;

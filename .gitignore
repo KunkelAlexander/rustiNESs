@@ -6,3 +6,4 @@ src/main.rs
 .gitignore
 output/
 roms/
+profile.json.gz
