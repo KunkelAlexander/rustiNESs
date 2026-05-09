@@ -10,7 +10,7 @@ pub struct Nes {
     bus: Bus<Cartridge>,
     system_clock_counter: u32,
     audio_buffer: Vec<f32>,
-    sine_phase:   f64,
+    sine_phase:   f32,
 }
 
 
@@ -28,15 +28,15 @@ impl Nes {
             cpu:                  Olc6502::new(),
             bus:                  Bus::new(Cartridge::new()),
             system_clock_counter: 0,
-            audio_buffer: Vec::new(),
-            sine_phase:   0.0,
+            audio_buffer:         Vec::new(),
+            sine_phase:           0.0,
         }
     }
 
     // This is a dummy method for testing
     pub fn generate_audio_frame(&mut self) {
         for _ in 0..735 {
-            self.audio_buffer.push((self.sine_phase * std::f64::consts::TAU).sin() as f32 * 0.3);
+            self.audio_buffer.push((self.sine_phase * std::f32::consts::TAU).sin() as f32 * 0.3);
             self.sine_phase = (self.sine_phase + 440.0 / 44100.0).fract();
         }
     }
