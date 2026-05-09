@@ -165,11 +165,11 @@ impl Olc2A03 {
 
             
             // The binary output of the sequencer sounds terrible
-            //self.pulse1_sample = self.pulse1_sequence.clock(self.pulse1_enable) as f32; 
+            self.pulse1_sample = self.pulse1_sequence.clock(self.pulse1_enable) as f32; 
 
-            self.pulse1_osc.frequency = 1789773. / (16. * ((self.pulse1_sequence.reload as f32) + 1.));
-            self.pulse1_sample = self.pulse1_osc.sample(self.global_time as f32); 
-            self.clock_counter = self.clock_counter.wrapping_add(1);
+            //self.pulse1_osc.frequency = 1789773. / (16. * ((self.pulse1_sequence.reload as f32) + 1.));
+            //self.pulse1_sample        = self.pulse1_osc.sample(self.global_time as f32); 
+            self.clock_counter        = self.clock_counter.wrapping_add(1);
         }
 
 
@@ -205,10 +205,10 @@ impl ApuInterface for Olc2A03 {
             // Set duty cycle of channel 1's pulse wave form
             0x4000 => {
                 match (data & 0xC0) >> 6 {
-                    0x00 => {self.pulse1_sequence.sequence = 0b00000001; self.pulse1_osc.duty_cycle = 0.125},
-                    0x01 => {self.pulse1_sequence.sequence = 0b00000011; self.pulse1_osc.duty_cycle = 0.250},
-                    0x02 => {self.pulse1_sequence.sequence = 0b00001111; self.pulse1_osc.duty_cycle = 0.500},
-                    0x03 => {self.pulse1_sequence.sequence = 0b11111100; self.pulse1_osc.duty_cycle = 0.750},
+                    0x00 => {self.pulse1_sequence.sequence = 0b00000001; self.pulse1_osc.duty_cycle = 0.125;},
+                    0x01 => {self.pulse1_sequence.sequence = 0b00000011; self.pulse1_osc.duty_cycle = 0.250;},
+                    0x02 => {self.pulse1_sequence.sequence = 0b00001111; self.pulse1_osc.duty_cycle = 0.500;},
+                    0x03 => {self.pulse1_sequence.sequence = 0b11111100; self.pulse1_osc.duty_cycle = 0.750;},
                     _    => {}
                 }
             }, 

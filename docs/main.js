@@ -216,7 +216,10 @@ async function initAudio() {
         this.ring = new Float32Array(65536);
         this.w = 0; this.r = 0;
         this.port.onmessage = ({data}) => {
-          for (const s of data) this.ring[this.w++ % 65536] = s;
+          for (const s of data) {
+            if (this.w - this.r > 8192) this.r = this.w - 4096;
+            this.ring[this.w++ % 65536] = s;
+          }
         };
       }
       process(_, outputs) {
@@ -296,7 +299,15 @@ function frame() {
       dbg_framesThisTick = framesToRun;
       for (let i = 0; i < framesToRun; i++) {
         emu.run_frame();
-        if (hasAudio) nesNode.port.postMessage(emu.get_audio_samples());
+        
+        const samples = emu.get_audio_samples();
+        if (dbg_rafCount % 60 === 0) {
+          console.log(`samples/frame=${samples.length} | bufLevel=${audioBufferLevel}`);
+        }
+        nesNode.port.postMessage(samples);
+
+
+
         emuFramesProduced++;
       }
 
@@ -433,7 +444,7 @@ async function enterFullscreen() {
     // Browser denied (e.g. iframe sandbox) — overlay already visible, carry on.
     log(`Native fullscreen unavailable: ${e.message ?? e}`);
   }
-  if (audioCtx?.state === "suspended") await audioCtx.resume();
+  if (audioCtx?.state === "suspended") await audioCtx.resume()
   // Let the first RAF tick anchor the clock; avoids catch-up after a pause
   audioClockStart = null;
   dbg_rafCount    = 0;
@@ -555,6 +566,11 @@ function wireTouchButton(btnEl) {
 // ═══════════════════════════════════════════════════════
 
 function bindUI() {
+  // Resume AudioContext on any interaction (browsers can suspend it)
+  document.addEventListener("pointerdown", () => {
+    if (audioCtx?.state === "suspended") audioCtx.resume();
+  });
+
   // Debug mode buttons
   document.querySelectorAll(".mode-switch button[data-mode]").forEach(btn => {
     btn.addEventListener("click", () => switchDebugMode(btn));

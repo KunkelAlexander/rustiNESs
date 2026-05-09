@@ -11,15 +11,13 @@ pub struct Nes {
     system_clock_counter: u32,
     audio_buffer: Vec<f32>,
     sine_phase:   f32,
+    audio_time:   f64,
 }
 
 
-// For sound, we need to worry about the timing a little more: 
-// ~5,369,318 system clocks per frame (NTSC)
-// ÷ 3 = ~1,789,773 CPU clocks per second
-// ÷ 60 = ~29,830 CPU clocks per frame
-// ÷ 44100 Hz = ~40.6 system clocks per audio sample
-const CLOCKS_PER_SAMPLE: u32 = 41; // ~1,789,773 / 44100
+// System clock rate (NTSC): CPU 1,789,773 Hz × 3 = 5,369,319 system clocks/sec
+const SYSTEM_CLOCK_RATE: f64 = 5_369_319.0;
+const AUDIO_SAMPLE_RATE: f64 = 44_100.0;
 
 
 impl Nes {
@@ -30,6 +28,7 @@ impl Nes {
             system_clock_counter: 0,
             audio_buffer:         Vec::new(),
             sine_phase:           0.0,
+            audio_time:           0.0,
         }
     }
 
@@ -108,7 +107,9 @@ impl Nes {
             self.clock();  // advances APU + PPU + CPU timing
 
             
-            if self.system_clock_counter % CLOCKS_PER_SAMPLE == 0 {
+            self.audio_time += 1.0;
+            if self.audio_time >= SYSTEM_CLOCK_RATE / AUDIO_SAMPLE_RATE {
+                self.audio_time -= SYSTEM_CLOCK_RATE / AUDIO_SAMPLE_RATE;
                 self.audio_buffer.push(self.bus.apu.get_output_sample());
             }
         }
