@@ -108,6 +108,52 @@ impl OscillatorPulse {
 
 }
 
+pub struct Envelope {
+    start:         bool,
+    disable:       bool,
+    divider_count: u16,
+    volume:        u16,
+    output:        u16,
+    decay_count:   u16,
+}
+
+impl Envelope {
+    pub fn new() -> Self {
+        Self {
+            start:         false,
+            disable:       false,
+            divider_count: 0,
+            volume:        0,
+            output:        0,
+            decay_count:   0,
+        }
+    }
+
+    pub fn clock(&mut self, loop_flag: bool) {
+        if !self.start {
+            if self.divider_count == 0 {
+                self.divider_count = self.volume;
+
+                if self.decay_count == 0 {
+                    if loop_flag {
+                        self.decay_count = 15;
+                    }
+                } else {
+                    self.decay_count -= 1;
+                }
+            } else {
+                self.divider_count -= 1;
+            }
+        } else {
+            self.start         = false;
+            self.decay_count   = 15;
+            self.divider_count = self.volume;
+        }
+
+        self.output = if self.disable { self.volume } else { self.decay_count };
+    }
+}
+
 pub enum SequencerKind {
     Pulse,
     Triangle,
@@ -159,13 +205,19 @@ impl Sequencer {
 
 pub struct Olc2A03 {
     pulse1_enable:       bool, 
+    pulse1_halt:         bool,
     pulse1_sample:       f32,
+    pulse1_output:       f32,
     pulse1_sequence:     Sequencer, 
     pulse1_osc:          OscillatorPulse,
     pulse2_enable:       bool, 
+    pulse2_halt:         bool, 
     pulse2_sample:       f32,
+    pulse2_output:       f32,
     pulse2_sequence:     Sequencer, 
     pulse2_osc:          OscillatorPulse,
+    pulse1_env:          Envelope,
+    pulse2_env:          Envelope,
     wavetable:           WaveTable,
     clock_counter:       u32, 
     frame_clock_counter: u32, 
@@ -177,13 +229,19 @@ impl Olc2A03 {
     pub fn new() -> Self {
         Self {
             pulse1_enable:       true, 
+            pulse1_halt:         false, 
             pulse1_sample:       0.0,
+            pulse1_output:       0.0,
             pulse1_sequence:     Sequencer::new(SequencerKind::Pulse), 
             pulse1_osc:          OscillatorPulse::new(),
             pulse2_enable:       true, 
+            pulse2_halt:         false, 
             pulse2_sample:       0.0,
+            pulse2_output:       0.0,
             pulse2_sequence:     Sequencer::new(SequencerKind::Pulse), 
             pulse2_osc:          OscillatorPulse::new(),
+            pulse1_env:          Envelope::new(),
+            pulse2_env:          Envelope::new(),
             wavetable:           WaveTable::new(32),
             clock_counter:       0, 
             frame_clock_counter: 0, 
@@ -222,6 +280,8 @@ impl Olc2A03 {
             }
 
             if is_quarter_frame_clock {
+                self.pulse1_env.clock(self.pulse1_halt);
+                self.pulse2_env.clock(self.pulse2_halt);
 
             }
 
@@ -234,13 +294,26 @@ impl Olc2A03 {
             //self.pulse1_sample = self.pulse1_sequence.clock(self.pulse1_enable) as f32; 
 
             self.pulse1_osc.frequency = 1789773. / (16. * ((self.pulse1_sequence.reload as f32) + 1.));
+            self.pulse1_osc.amplitude = ((self.pulse1_env.output - 1) as f32) / 16.0;
             self.pulse1_osc.advance(1789773.);
             self.pulse1_sample        = self.pulse1_osc.sample(self.global_time as f32, &self.wavetable); 
 
             
             self.pulse2_osc.frequency = 1789773. / (16. * ((self.pulse2_sequence.reload as f32) + 1.));
+            self.pulse1_osc.amplitude = ((self.pulse2_env.output - 1) as f32) / 16.0;
             self.pulse2_osc.advance(1789773.);
             self.pulse2_sample        = self.pulse2_osc.sample(self.global_time as f32, &self.wavetable); 
+
+            self.pulse1_output = self.pulse1_sample;
+            self.pulse2_output = self.pulse2_sample;
+
+            if !self.pulse1_enable && self.pulse1_env.output <= 2 {
+                self.pulse1_output = 0.0;
+            }
+            if !self.pulse2_enable && self.pulse2_env.output <= 2 {
+                self.pulse2_output = 0.0;
+            }
+
         }
 
         self.clock_counter        = self.clock_counter.wrapping_add(1);
@@ -261,7 +334,7 @@ impl Olc2A03 {
 
     // Perform the mixing
     pub fn get_output_sample(&self) -> f32 {
-        (self.pulse1_sample + self.pulse2_sample) as f32
+        (self.pulse1_output + self.pulse2_output) as f32
     }
 }
 
@@ -288,6 +361,10 @@ impl ApuInterface for Olc2A03 {
                     0x03 => {self.pulse1_sequence.sequence = 0b11111100; self.pulse1_osc.duty_cycle = 0.750; self.pulse1_osc.duty_idx = 3;},
                     _    => {}
                 }
+
+                self.pulse1_halt        = (data & 0x20) != 0; 
+                self.pulse1_env.volume  = (data & 0x0F) as u16;
+                self.pulse1_env.disable = (data & 0x10) != 0;
             }, 
             0x4001 => {}, 
             // Control pulse 1 sequencer reload value - first 8 bits
@@ -298,6 +375,7 @@ impl ApuInterface for Olc2A03 {
             0x4003 => {
                 self.pulse1_sequence.reload = (self.pulse1_sequence.reload & 0x00FF) | (((data & 0x07) as u16) << 8);
                 self.pulse1_sequence.timer  = self.pulse1_sequence.reload;
+		        self.pulse1_env.start       = true;
             }, 
             // Set duty cycle of channel 2's pulse wave form
             0x4004 =>  {
@@ -308,6 +386,9 @@ impl ApuInterface for Olc2A03 {
                     0x03 => {self.pulse2_sequence.sequence = 0b11111100; self.pulse2_osc.duty_cycle = 0.750; self.pulse2_osc.duty_idx = 3;},
                     _    => {}
                 }
+                self.pulse2_halt        = (data & 0x20) != 0; 
+                self.pulse2_env.volume  = (data & 0x0F) as u16;
+                self.pulse2_env.disable = (data & 0x10) != 0;
             }
             0x4005 => {}, 
             0x4006 => {
@@ -323,9 +404,12 @@ impl ApuInterface for Olc2A03 {
             // Enable and disable pulse 1 sequencer
             0x4015 => {
                 self.pulse1_enable = (data & 0x01) != 0;
-                self.pulse2_enable = (data & 0x01) != 0;
+                self.pulse2_enable = (data & 0x02) != 0;
             }, 
-            0x400F => {}, 
+            0x400F => {       
+                self.pulse1_env.start = true;
+                self.pulse2_env.start = true;
+            }, 
             _      => {},
         };
     }
