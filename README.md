@@ -51,6 +51,10 @@ This project was written by hand as a learning exercise. I mainly used LLMs for 
 
 ![](figures/35.png)
 
+- Add FPS counter in top left corner - SMB seems to be running at a constant 60 FPS with sound now. 
+
+![](figures/36.png) 
+
 ### Day 13: 01.05.2025
 - Watch [NES Emulator Part #6: APU - Sounds, Beeps & Bloops](https://www.youtube.com/watch?v=72dI7dB3ZvQ)
 - Sound is unforgiving - we need to make sure that the timing is perfect

@@ -14,6 +14,11 @@ let audioView  = null;
 let wasmMemory = null; 
 let frameView  = null;
 
+// Lightweight FPS counter for fullscreen overlay
+let fps_lastTime  = 0;
+let fps_frames    = 0;
+let fps_display   = 0;
+
 // "nes" | "cpu" | "fullscreen"
 let mode       = "nes";
 // Mode we came from before entering fullscreen
@@ -348,13 +353,24 @@ function frame() {
       renderFullscreenFrame();
       tRender = performance.now() - b;
       
-      // Log once per second
-      if (dbg_rafCount % 60 === 0) {
-        const now = performance.now();
-        dbg_fps = Math.round(60000 / (now - dbg_fpsTimestamp));
-        dbg_fpsTimestamp = now;
-        console.log(`[RAF-diag] fps=${dbg_fps}`);
+      // FPS counter — update display value once per second
+      fps_frames++;
+      const fps_now = performance.now();
+      if (fps_now - fps_lastTime >= 1000) {
+        fps_display  = fps_frames;
+        fps_frames   = 0;
+        fps_lastTime = fps_now;
       }
+
+      // Draw FPS overlay directly on the fullscreen canvas (after putImageData)
+      fsCtx.font         = "bold 10px monospace";
+      fsCtx.textBaseline = "top";
+      fsCtx.fillStyle    = "rgba(0,0,0,0.55)";
+      fsCtx.fillRect(2, 2, 38, 14);
+      fsCtx.fillStyle    = fps_display >= 58 ? "#36d399"   // green  — smooth
+                        : fps_display >= 45 ? "#f5a623"   // amber  — mild drop
+                        :                     "#ff5c7c";  // red    — struggling
+      fsCtx.fillText(`${fps_display} FPS`, 5, 4);
     }
   } catch (e) {
     running = false;
