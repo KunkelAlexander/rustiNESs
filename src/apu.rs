@@ -189,20 +189,22 @@ pub enum SequencerKind {
 }
 pub struct Sequencer {
     kind:     SequencerKind,
-    sequence: u32, 
-    timer:    u16, 
-    reload:   u16, 
-    output:   u8, 
+    sequence: u32,
+    timer:    u16,
+    reload:   u16,
+    output:   u8,
+    pub mode: bool, // noise only: false=bit1 feedback (long), true=bit6 feedback (short/periodic)
 }
 
 impl Sequencer {
     pub fn new(sequencer_kind: SequencerKind) -> Self {
         Self {
             kind:     sequencer_kind,
-            sequence:  match sequencer_kind { SequencerKind::Noise => 0xDBDB, _ => 0x00000000 },
-            timer:    0x0000, 
-            reload:   0x0000, 
+            sequence: match sequencer_kind { SequencerKind::Noise => 0xDBDB, _ => 0x00000000 },
+            timer:    0x0000,
+            reload:   0x0000,
             output:   0x00,
+            mode:     false,
         }
     }
 
@@ -219,8 +221,10 @@ impl Sequencer {
                 }
                 SequencerKind::Triangle => {},
                 SequencerKind::Noise    => {
-                    let s = self.sequence as u16;
-                    self.sequence = (((s & 0x0001) ^ ((s & 0x0002) >> 1)) << 14 | (s & 0x7FFF) >> 1) as u32;
+                    let s        = self.sequence as u16;
+                    let other    = if self.mode { (s & 0x0040) >> 6 } else { (s & 0x0002) >> 1 };
+                    let feedback = (s & 0x0001) ^ other;
+                    self.sequence = ((feedback << 14) | ((s & 0x7FFF) >> 1)) as u32;
                 },
             }
 
@@ -451,7 +455,7 @@ impl Olc2A03 {
             }
 
             self.noise_sequence.clock(self.noise_enable);
-            if  self.noise_lc.counter > 0 && self.noise_sequence.timer >= 8 {
+            if self.noise_lc.counter > 0 && self.noise_env.output > 0 {
                 let noise_target = self.noise_sequence.output as f32 * ((self.noise_env.output - 1) as f32 / 16.0);
                 self.noise_output += (noise_target - self.noise_output) * 0.25;
             } else {
@@ -577,11 +581,11 @@ impl ApuInterface for Olc2A03 {
                 self.pulse2_env.disable = (data & 0x10) != 0;
             }
             0x4005 => {
-                self.pulse2_sweep.enabled = data & 0x80 != 0;
+                self.pulse2_sweep.enabled =  data & 0x80 != 0;
                 self.pulse2_sweep.period  = (data & 0x70) >> 4;
-                self.pulse2_sweep.down    = data & 0x08 != 0;
-                self.pulse2_sweep.shift   = data & 0x07;
-                self.pulse2_sweep.reload  = true;
+                self.pulse2_sweep.down    =  data & 0x08 != 0;
+                self.pulse2_sweep.shift   =  data & 0x07;
+                self.pulse2_sweep.reload  =  true;
 
             }, 
             0x4006 => {
@@ -600,6 +604,7 @@ impl ApuInterface for Olc2A03 {
                 self.noise_halt        = (data & 0x20) != 0;
             }, 
             0x400E => {
+                self.noise_sequence.mode = data & 0x80 != 0;
                 match data & 0x0F {
                     0x00 => {self.noise_sequence.reload = 0;   }
                     0x01 => {self.noise_sequence.reload = 4;   }

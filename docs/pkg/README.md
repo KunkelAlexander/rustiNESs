@@ -13,26 +13,25 @@ It currently emulates the 6502 CPU, the PPU, the APU, controller input, DMA, and
 
 ## Learning Approach
 
-This project was written by hand as a learning exercise. I mainly used LLMs for explanations, discussion, and a few repetitive tasks, while keeping the emulator implementation itself manual.
+This Rust project was written by hand as a learning exercise. I mainly used LLMs for explanations, discussion, and a few repetitive tasks, while keeping the emulator implementation in Rust itself manual. The JS/HTML GUI was written using Claude. 
 
 
 ## Features
 
 - 6502 CPU emulation
 - PPU background and sprite rendering
-- APU (pulse1, pulse2 and noise channels)
+- APU (pulse 1, pulse 2, noise)
 - DMA transfers to OAM
 - Controller input
 - Mapper 000 support
 - WebAssembly browser build
-- CPU validation using Harte tests (you need to download those manually)
+- CPU validation using Harte tests (you need to download these manually from [here]([here](https://github.com/SingleStepTests/65x02/tree/main/nes6502)))
 
 ## Devlog
 
 
-### Day 15: 10.05.2025
-- Finish pulse2 and noise channel implementation - SMB now sounds nice! 
-- I still have crackling but my understanding is that the best option - syncing to audio - is a bit tricky in Github pages and I don't want to further complicate the code. 
+### Day 15: 09.05.2025
+- Noise now works to the point where SMB sounds nice !
 
 ### Day 14: 09.05.2025
 
@@ -59,8 +58,6 @@ This project was written by hand as a learning exercise. I mainly used LLMs for 
 - Add FPS counter in top left corner - SMB seems to be running at a constant 60 FPS with sound now. 
 
 ![](figures/36.png) 
-
-
 
 ### Day 13: 01.05.2025
 - Watch [NES Emulator Part #6: APU - Sounds, Beeps & Bloops](https://www.youtube.com/watch?v=72dI7dB3ZvQ)
@@ -473,7 +470,7 @@ src/
 ├── main.rs          # Entry point
 ├── cpu.rs           # 6502 core (registers, execution)
 ├── ppu.rs           # Pixel processing unit - the GPU
-├── apu.rs           # Audio processing unit - the APU 
+├── apu.rs           # Audio processing unit - the APU
 ├── cartridge.rs     # Cartridge template
 ├── mapper.rs        # Add more mappers here
 ├── bus.rs           # Contains RAM, PPU, cartridge and controller, but not the CPU to avoid rust's double borrow checks
@@ -492,7 +489,7 @@ tests/               # Harte CPU tests
 - Local application for debugging: `cargo run`
 - WASM library for the web application:  `wasm-pack build --release --target web --out-dir docs/pkg`
 - Test the web application with `python -m http.server` and go to `http://localhost:8000/docs/` in your browser - I tested the application with Firefox
-- Tests: `cargo test --release -- --nocapture` (uncomment `serde` in `cargo.toml` and download the tests from [here](github.com/SingleStepTests/65x02/tree/main/nes6502)])
+- Tests: `cargo test --release -- --nocapture` (uncomment `serde` in `cargo.toml` and download tests [here](https://github.com/SingleStepTests/65x02/tree/main/nes6502))
 
 
 ## License
