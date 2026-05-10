@@ -154,6 +154,33 @@ impl Envelope {
     }
 }
 
+pub struct LengthCounter {
+    counter: u8,
+}
+
+impl LengthCounter {
+    pub fn new() -> Self {
+        Self { counter: 0 }
+    }
+
+    pub fn clock(&mut self, enable: bool, halt: bool) -> u8 {
+        if !enable {
+            self.counter = 0;
+        } else if self.counter > 0 && !halt {
+            self.counter -= 1;
+        }
+        self.counter
+    }
+}
+
+const LENGTH_TABLE: [u8; 32] = [
+     10, 254, 20,  2, 40,  4, 80,  6,
+    160,   8, 60, 10, 14, 12, 26, 14,
+     12,  16, 24, 18, 48, 20, 96, 22,
+    192,  24, 72, 26, 16, 28, 32, 30,
+];
+
+
 #[derive(Clone, Copy)]
 pub enum SequencerKind {
     Pulse,
@@ -276,6 +303,7 @@ pub struct Olc2A03 {
     pulse1_osc:          OscillatorPulse,
     pulse1_sweep:        Sweeper,
     pulse1_env:          Envelope,
+    pulse1_lc:           LengthCounter,
     pulse1_visual:       u16,
 
     // Pulse 2
@@ -287,14 +315,16 @@ pub struct Olc2A03 {
     pulse2_osc:          OscillatorPulse,
     pulse2_sweep:        Sweeper,
     pulse2_env:          Envelope,
+    pulse2_lc:           LengthCounter,
     pulse2_visual:       u16,
 
-    // Noise 
+    // Noise
     noise_enable:        bool,
     noise_halt:          bool,
     noise_output:        f32,
     noise_sequence:      Sequencer,
     noise_env:           Envelope,
+    noise_lc:            LengthCounter,
     noise_visual:        u16,
 
     wavetable:           WaveTable,
@@ -316,25 +346,28 @@ impl Olc2A03 {
             pulse1_osc:          OscillatorPulse::new(),
             pulse1_sweep:        Sweeper::new(),
             pulse1_env:          Envelope::new(),
+            pulse1_lc:           LengthCounter::new(),
             pulse1_visual:       0,
 
-            // Pulse 2 
+            // Pulse 2
             pulse2_enable:       true,
-            pulse2_halt:         false, 
+            pulse2_halt:         false,
             pulse2_sample:       0.0,
             pulse2_output:       0.0,
             pulse2_sequence:     Sequencer::new(SequencerKind::Pulse),
             pulse2_osc:          OscillatorPulse::new(),
             pulse2_sweep:        Sweeper::new(),
             pulse2_env:          Envelope::new(),
+            pulse2_lc:           LengthCounter::new(),
             pulse2_visual:       0,
 
-            // Noise 
-            noise_enable:        true, 
-            noise_halt:          false, 
+            // Noise
+            noise_enable:        true,
+            noise_halt:          false,
             noise_output:        0.0,
             noise_sequence:      Sequencer::new(SequencerKind::Noise),
             noise_env:           Envelope::new(),
+            noise_lc:            LengthCounter::new(),
             noise_visual:        0,
 
             wavetable:           WaveTable::new(32),
@@ -382,6 +415,9 @@ impl Olc2A03 {
             }
 
             if is_half_frame_clock {
+                self.pulse1_lc.clock(self.pulse1_enable, self.pulse1_halt);
+                self.pulse2_lc.clock(self.pulse2_enable, self.pulse2_halt);
+                self.noise_lc.clock(self.noise_enable, self.noise_halt);
                 self.pulse1_sweep.clock(&mut self.pulse1_sequence.reload, false);
                 self.pulse2_sweep.clock(&mut self.pulse2_sequence.reload, true);
             }
@@ -397,26 +433,27 @@ impl Olc2A03 {
 
             
             self.pulse2_osc.frequency = 1789773. / (16. * ((self.pulse2_sequence.reload as f32) + 1.));
-            self.pulse1_osc.amplitude = ((self.pulse2_env.output - 1) as f32) / 16.0;
+            self.pulse2_osc.amplitude = ((self.pulse2_env.output - 1) as f32) / 16.0;
             self.pulse2_osc.advance(1789773.);
             self.pulse2_sample        = self.pulse2_osc.sample(self.global_time as f32, &self.wavetable); 
 
 
-			if self.pulse1_sequence.timer >= 8 && !self.pulse1_sweep.mute && self.pulse1_env.output > 2 {
+			if self.pulse1_lc.counter > 0 && self.pulse1_sequence.timer >= 8 && !self.pulse1_sweep.mute && self.pulse1_env.output > 2 {
 				self.pulse1_output += (self.pulse1_sample - self.pulse1_output) * 0.5;
             } else {
                 self.pulse1_output = 0.0;
             }
             
-			if self.pulse2_sequence.timer >= 8 && !self.pulse2_sweep.mute && self.pulse2_env.output > 2 {
+			if self.pulse2_lc.counter > 0 && self.pulse2_sequence.timer >= 8 && !self.pulse2_sweep.mute && self.pulse2_env.output > 2 {
 				self.pulse2_output += (self.pulse2_sample - self.pulse2_output) * 0.5;
             } else {
                 self.pulse2_output = 0.0;
             }
 
             self.noise_sequence.clock(self.noise_enable);
-            if  self.noise_sequence.timer >= 8 {
-                self.noise_output = self.noise_sequence.output as f32 * ((self.noise_env.output - 1) as f32 / 16.0);
+            if  self.noise_lc.counter > 0 && self.noise_sequence.timer >= 8 {
+                let noise_target = self.noise_sequence.output as f32 * ((self.noise_env.output - 1) as f32 / 16.0);
+                self.noise_output += (noise_target - self.noise_output) * 0.25;
             } else {
                 self.noise_output = 0.0;
             }
@@ -523,6 +560,7 @@ impl ApuInterface for Olc2A03 {
             0x4003 => {
                 self.pulse1_sequence.reload = (self.pulse1_sequence.reload & 0x00FF) | (((data & 0x07) as u16) << 8);
                 self.pulse1_sequence.timer  = self.pulse1_sequence.reload;
+                self.pulse1_lc.counter      = LENGTH_TABLE[((data & 0xF8) >> 3) as usize];
 		        self.pulse1_env.start       = true;
             }, 
             // Set duty cycle of channel 2's pulse wave form
@@ -552,6 +590,8 @@ impl ApuInterface for Olc2A03 {
             0x4007 => {
                 self.pulse2_sequence.reload = (self.pulse2_sequence.reload & 0x00FF) | (((data & 0x07) as u16) << 8);
                 self.pulse2_sequence.timer  = self.pulse2_sequence.reload;
+                self.pulse2_lc.counter      = LENGTH_TABLE[((data & 0xF8) >> 3) as usize];
+		        self.pulse2_env.start       = true;
             }, 
             0x4008 => {}, 
             0x400C => {
@@ -590,6 +630,8 @@ impl ApuInterface for Olc2A03 {
                 self.pulse1_env.start = true;
                 self.pulse2_env.start = true;
                 self.noise_env.start  = true;
+                self.noise_lc.counter      = LENGTH_TABLE[((data & 0xF8) >> 3) as usize];
+
             }, 
             _      => {},
         };
