@@ -372,7 +372,7 @@ body[data-mode="fullscreen"] .fs-overlay {
   width: 100vw;
   height: 100vh;
   display: grid;
-  grid-template-columns: 140px 1fr 140px;
+  grid-template-columns: 180px 1fr 180px;
   grid-template-rows: 1fr auto;
   align-items: center;
   justify-items: center;
@@ -414,7 +414,7 @@ body[data-mode="fullscreen"] .fs-overlay {
 /* NES output canvas fills center optimally */
 #fsScreen {
   display: block;
-  width:  min(calc(100vw - 300px), calc(100vh * 256 / 240));
+  width:  min(calc(100vw - 380px), calc(100vh * 256 / 240));
   height: auto;
   aspect-ratio: 256 / 240;
   image-rendering: pixelated;
@@ -462,14 +462,14 @@ body[data-mode="fullscreen"] .fs-overlay {
   border: 1px solid rgba(255,255,255,.2);
   color: rgba(255,255,255,.85);
   border-radius: 999px;
-  padding: 7px 14px;
-  font-size: 12px;
+  padding: 10px 18px;
+  font-size: 14px;
   font-weight: 500;
   cursor: pointer;
   transition: background .12s, transform .05s;
   touch-action: none;
   user-select: none;
-  min-width: 60px;
+  min-width: 72px;
   text-align: center;
 }
 .ss-btn:hover   { background: rgba(255,255,255,.18); }
@@ -480,8 +480,8 @@ body[data-mode="fullscreen"] .fs-overlay {
 
 .joystick-canvas {
   display: block;
-  width: 140px;
-  height: 140px;
+  width: 170px;
+  height: 170px;
   touch-action: none;
   cursor: pointer;
   border-radius: 50%;
@@ -497,10 +497,10 @@ body[data-mode="fullscreen"] .fs-overlay {
 }
 
 .ab-btn {
-  width: 70px; height: 70px;
+  width: 84px; height: 84px;
   border-radius: 50%;
   border: 1px solid rgba(255,255,255,.2);
-  font-size: 20px;
+  font-size: 24px;
   font-weight: 700;
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
@@ -570,18 +570,18 @@ body[data-mode="fullscreen"] .fs-overlay {
 
 @media (max-height: 420px) {
   .fs-landscape {
-    grid-template-columns: 110px 1fr 110px;
+    grid-template-columns: 130px 1fr 130px;
     padding: 6px;
   }
 
   #fsScreen {
-    width: min(calc(100vw - 240px), calc(100vh * 256 / 240));
+    width: min(calc(100vw - 280px), calc(100vh * 256 / 240));
   }
 
-  .ab-btn { width: 56px; height: 56px; font-size: 16px; }
+  .ab-btn { width: 64px; height: 64px; font-size: 18px; }
   .ss-btn { padding: 5px 10px; font-size: 11px; min-width: 50px; }
   .ab-select-start { gap: 8px; }
-  .joystick-canvas { width: 110px !important; height: 110px !important; }
+  .joystick-canvas { width: 126px !important; height: 126px !important; }
 }
 
 /* On desktop: hide touch controller side panels when no touch */
