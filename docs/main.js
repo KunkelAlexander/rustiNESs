@@ -10,6 +10,7 @@ let rafHandle  = null;
 let audioCtx   = null;
 let nesNode    = null;
 let audioBufferLevel = 0;
+let audioView  = null; 
 let wasmMemory = null; 
 let frameView  = null;
 
@@ -47,6 +48,14 @@ const NES_PALETTE = [
   [204,210,120],[180,222,120],[168,226,144],[152,226,180],[160,214,228],[160,162,160],[0,0,0],[0,0,0],
 ];
 
+const NES_PALETTE_U32 = new Uint32Array(64);
+for (let i = 0; i < 64; i++) {
+  const [r, g, b] = NES_PALETTE[i];
+  NES_PALETTE_U32[i] = (255 << 24) | (b << 16) | (g << 8) | r; // little-endian RGBA
+}
+
+
+
 // ═══════════════════════════════════════════════════════
 //  Canvas / image data
 // ═══════════════════════════════════════════════════════
@@ -54,10 +63,12 @@ const NES_PALETTE = [
 // Debug canvas (inside card)
 let ctx         = null;
 let imageData   = null;
+let imageData32 = null;
 
 // Fullscreen canvas
 let fsCtx       = null;
 let fsImageData = null;
+let fsImageData32 = null;
 
 // Pattern table canvases
 let pattern0Ctx       = null;
@@ -70,12 +81,14 @@ function initCanvas() {
   if (screen) {
     ctx       = screen.getContext("2d");
     imageData = ctx.createImageData(256, 240);
+    imageData32 = new Uint32Array(imageData.data.buffer);
   }
 
   const fsScreen = $("fsScreen");
   if (fsScreen) {
     fsCtx       = fsScreen.getContext("2d");
     fsImageData = fsCtx.createImageData(256, 240);
+    fsImageData32 = new Uint32Array(fsImageData.data.buffer);
   }
 
   const p0 = $("pattern0");
@@ -164,13 +177,10 @@ function updateDebugUI() {
 //  Frame rendering helpers
 // ═══════════════════════════════════════════════════════
 
-function writeFrameToImageData(frame, imgData) {
+function writeFrameToImageData(frame, data32) {
+  const pal = NES_PALETTE_U32;
   for (let i = 0; i < frame.length; i++) {
-    const [r,g,b] = NES_PALETTE[frame[i] & 0x3f];
-    imgData.data[i*4+0] = r;
-    imgData.data[i*4+1] = g;
-    imgData.data[i*4+2] = b;
-    imgData.data[i*4+3] = 255;
+    data32[i] = pal[frame[i] & 0x3f];
   }
 }
 
@@ -189,13 +199,13 @@ function getFrameView() {
 
 function renderDebugFrame() {
   if (!emu || !ctx) return;
-  writeFrameToImageData(getFrameView(), imageData);
+  writeFrameToImageData(getFrameView(), imageData32);
   ctx.putImageData(imageData, 0, 0);
 }
 
 function renderFullscreenFrame() {
   if (!emu || !fsCtx) return;
-  writeFrameToImageData(getFrameView(), fsImageData);
+  writeFrameToImageData(getFrameView(), fsImageData32);
   fsCtx.putImageData(fsImageData, 0, 0);
 }
 
@@ -239,7 +249,7 @@ async function initAudio() {
         const out = outputs[0][0];
         const available = this.w - this.r;
         // Report buffer level back to main thread every 128 samples
-        this.port.postMessage(available);
+        if (++this.tick % 128 === 0) this.port.postMessage(available);
         if (available < out.length) { out.fill(0); return true; }
         for (let i = 0; i < out.length; i++) out[i] = this.ring[this.r++ % 65536];
         return true;
@@ -274,82 +284,77 @@ let dbg_fpsTimestamp  = 0;
 let dbg_fps           = 0;
 let dbg_framesThisTick = 0;
 let dbg_driftMax      = 0;
-
 function frame() {
   if (!running) return;
-
+  
+  const t0 = performance.now();
+  let tWasm = 0, tRender = 0, tUI = 0;
+  
   try {
     if (mode === "cpu") {
       emu.cpu_clock();
       updateDebugUI();
-
+      
     } else if (mode === "nes") {
+      const a = performance.now();
       emu.run_frame();
+      tWasm = performance.now() - a;
+      
+      const b = performance.now();
       renderDebugFrame();
+      tRender = performance.now() - b;
+      
       patternFrameCounter++;
       if (patternFrameCounter >= 60) { renderPatternTables(); patternFrameCounter = 0; }
+      
+      const c = performance.now();
       updateDebugUI();
-
+      tUI = performance.now() - c;
+      
     } else if (mode === "fullscreen") {
-      const hasAudio = !!nesNode && !!audioCtx;
-
       dbg_rafCount++;
       if (dbg_rafCount === 1) dbg_fpsTimestamp = performance.now();
-
-      // Determine how many NES frames to run this tick
-      let framesToRun;
-      if (hasAudio) {
-        // Anchor clock on first tick after entering fullscreen
-        if (audioClockStart === null) {
-          audioClockStart = audioCtx.currentTime;
-          emuFramesProduced = 0;
-        }
-        const drift = (audioCtx.currentTime - audioClockStart) * NES_FPS - emuFramesProduced;
-        framesToRun = Math.max(0, Math.min(Math.round(drift), 3));
-        dbg_driftMax = Math.max(dbg_driftMax, drift);
-      } else {
-        framesToRun = 1;
-      }
-
-      dbg_framesThisTick = framesToRun;
-      for (let i = 0; i < framesToRun; i++) {
-        emu.run_frame();
-        
-        const samples = emu.get_audio_samples();
-        if (dbg_rafCount % 60 === 0) {
-          console.log(`samples/frame=${samples.length} | bufLevel=${audioBufferLevel}`);
-        }
-        nesNode.port.postMessage(samples);
-
-
-
-        emuFramesProduced++;
-      }
-
-      // Log once per second (~60 RAF ticks)
+      
+      // Pure RAF-driven: one frame per tick, no audio sync, no audio output
+      const a = performance.now();
+      const before = wasmMemory.buffer.byteLength;
+      emu.run_frame();
+      const after = wasmMemory.buffer.byteLength;
+      if (after !== before) console.warn(`WASM memory grew: ${before} → ${after} bytes`);
+      tWasm = performance.now() - a;
+      
+      // Still drain audio samples so they don't accumulate WASM-side
+      // (but don't post them — we're testing render path only)
+      emu.get_audio_samples();
+      
+      const b = performance.now();
+      renderFullscreenFrame();
+      tRender = performance.now() - b;
+      
+      // Log once per second
       if (dbg_rafCount % 60 === 0) {
         const now = performance.now();
         dbg_fps = Math.round(60000 / (now - dbg_fpsTimestamp));
         dbg_fpsTimestamp = now;
-        console.log(
-          `[NES] fps=${dbg_fps} | frames/RAF=${dbg_framesThisTick}` +
-          (hasAudio
-            ? ` | drift_max=${dbg_driftMax.toFixed(2)} | t=${audioCtx.currentTime.toFixed(2)}s`
-            : " | no-audio")
-        );
-        dbg_driftMax = 0;
+        console.log(`[RAF-diag] fps=${dbg_fps}`);
       }
-
-      renderFullscreenFrame();
     }
-
   } catch (e) {
     running = false;
     setStatus(false, "Runtime error");
     log(`ERROR: ${e}`);
     return;
   }
-
+  
+  const total = performance.now() - t0;
+  if (total > 20) {
+    console.warn(
+      `Slow frame: total=${total.toFixed(1)}ms ` +
+      `wasm=${tWasm.toFixed(1)} render=${tRender.toFixed(1)} ui=${tUI.toFixed(1)} ` +
+      `mode=${mode}`
+    );
+  }
+  
   rafHandle = requestAnimationFrame(frame);
 }
 

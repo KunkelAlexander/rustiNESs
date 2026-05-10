@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>NES Emulator — run_frame Benchmark</title>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", monospace;
+    background: #1a1a1a;
+    color: #e0e0e0;
+    max-width: 800px;
+    margin: 40px auto;
+    padding: 20px;
+    line-height: 1.5;
+  }
+  h1 { color: #fff; margin-bottom: 4px; }
+  .sub { color: #888; margin-bottom: 24px; font-size: 14px; }
+  .controls {
+    background: #252525;
+    padding: 16px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+  }
+  label { display: block; margin: 8px 0; }
+  input[type="number"], input[type="file"] {
+    background: #1a1a1a;
+    color: #e0e0e0;
+    border: 1px solid #444;
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-family: inherit;
+  }
+  input[type="number"] { width: 120px; }
+  button {
+    background: #0071e3;
+    color: white;
+    border: none;
+    padding: 8px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    margin-top: 8px;
+    margin-right: 8px;
+  }
+  button:hover:not(:disabled) { background: #0084ff; }
+  button:disabled { background: #444; cursor: not-allowed; }
+  #output {
+    background: #0d0d0d;
+    border: 1px solid #333;
+    padding: 16px;
+    border-radius: 8px;
+    white-space: pre-wrap;
+    font-family: "Consolas", "Monaco", monospace;
+    font-size: 13px;
+    min-height: 200px;
+    overflow-x: auto;
+  }
+  .key { color: #36d399; }
+  .val { color: #fff; font-weight: bold; }
+  .warn { color: #ffb84d; }
+  .info { color: #64b5f6; }
+  hr { border: 0; border-top: 1px solid #333; margin: 12px 0; }
+</style>
+</head>
+<body>
+
+<h1>run_frame() Benchmark</h1>
+<div class="sub">Pure WASM CPU/PPU emulation — no rendering, no audio, no UI.</div>
+
+<div class="controls">
+  <label>
+    ROM file:
+    <input type="file" id="romInput" accept=".nes">
+  </label>
+  <label>
+    Iterations:
+    <input type="number" id="iterations" value="10000" min="100" step="1000">
+  </label>
+  <label>
+    Warmup frames (ignored):
+    <input type="number" id="warmup" value="500" min="0" step="100">
+  </label>
+  <button id="btnRun" disabled>Run benchmark</button>
+  <button id="btnClear">Clear output</button>
+</div>
+
+<div id="output">Waiting for ROM…</div>
+
+<script type="module">
+import init, { NES } from "./pkg/nes_emulator.js";
+
+const $ = id => document.getElementById(id);
+const out = $("output");
+
+let emu = null;
+let romBytes = null;
+
+function log(msg) {
+  out.textContent += msg + "\n";
+}
+function clear() { out.textContent = ""; }
+
+function fmt(ms) {
+  return ms.toFixed(3) + " ms";
+}
+
+async function boot() {
+  log("Loading WASM…");
+  const wasm = await init();
+  emu = new NES();
+  log("WASM loaded.");
+  log(`WASM memory pages: ${wasm.memory.buffer.byteLength / 65536}`);
+  log("");
+  log("Load a ROM to enable the benchmark.");
+}
+
+$("romInput").addEventListener("change", async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  romBytes = new Uint8Array(await file.arrayBuffer());
+  emu.insert_cartridge(romBytes);
+  emu.reset();
+  log(`Loaded ROM: ${file.name} (${romBytes.length} bytes)`);
+  $("btnRun").disabled = false;
+});
+
+$("btnClear").addEventListener("click", clear);
+
+$("btnRun").addEventListener("click", async () => {
+  $("btnRun").disabled = true;
+
+  const N       = parseInt($("iterations").value, 10);
+  const warmup  = parseInt($("warmup").value,    10);
+
+  log("");
+  log(`=== Benchmark: ${N} frames (${warmup} warmup) ===`);
+
+  // Reset to a clean state
+  emu.insert_cartridge(romBytes);
+  emu.reset();
+
+  // ─── Warmup ─────────────────────────────────────────
+  log(`Warming up (${warmup} frames)…`);
+  for (let i = 0; i < warmup; i++) emu.run_frame();
+  // Yield to browser briefly so warmup doesn't bleed into measurement
+  await new Promise(r => setTimeout(r, 50));
+
+  // ─── Bulk timing ────────────────────────────────────
+  log("Running bulk benchmark…");
+  const t0 = performance.now();
+  for (let i = 0; i < N; i++) {
+    emu.run_frame();
+  }
+  const elapsed = performance.now() - t0;
+  const avg = elapsed / N;
+
+  log("");
+  log(`--- Bulk results ---`);
+  log(`Total elapsed:    ${elapsed.toFixed(1)} ms`);
+  log(`Frames executed:  ${N}`);
+  log(`Avg per frame:    ${fmt(avg)}`);
+  log(`Effective FPS:    ${(1000 / avg).toFixed(1)}`);
+  log(`Realtime budget:  16.67 ms (60 FPS)`);
+  log(`Headroom:         ${((16.67 - avg) / 16.67 * 100).toFixed(1)}%`);
+
+  // ─── Per-frame timing (smaller sample) ──────────────
+  // Distribution gives us a sense of variance and outliers
+  await new Promise(r => setTimeout(r, 50));
+  log("");
+  log("Measuring per-frame distribution (1000 frames)…");
+  const samples = new Float64Array(1000);
+  for (let i = 0; i < 1000; i++) {
+    const t = performance.now();
+    emu.run_frame();
+    samples[i] = performance.now() - t;
+  }
+
+  // Stats
+  const sorted = Array.from(samples).sort((a, b) => a - b);
+  const min   = sorted[0];
+  const max   = sorted[sorted.length - 1];
+  const mean  = sorted.reduce((s, v) => s + v, 0) / sorted.length;
+  const p50   = sorted[Math.floor(sorted.length * 0.50)];
+  const p95   = sorted[Math.floor(sorted.length * 0.95)];
+  const p99   = sorted[Math.floor(sorted.length * 0.99)];
+  // Standard deviation
+  const variance = sorted.reduce((s, v) => s + (v - mean) ** 2, 0) / sorted.length;
+  const stddev = Math.sqrt(variance);
+
+  log("");
+  log("--- Per-frame distribution (1000 samples) ---");
+  log(`Min:     ${fmt(min)}`);
+  log(`Mean:    ${fmt(mean)}`);
+  log(`Median:  ${fmt(p50)}`);
+  log(`p95:     ${fmt(p95)}`);
+  log(`p99:     ${fmt(p99)}`);
+  log(`Max:     ${fmt(max)}`);
+  log(`StdDev:  ${fmt(stddev)}`);
+
+  // Note about timer resolution
+  log("");
+  log("Note: performance.now() is typically rounded to 0.1-1ms in browsers.");
+  log("If most samples cluster on round values, that's the timer, not the code.");
+
+  // ─── Resolution check ────────────────────────────────
+  const uniques = new Set(sorted.map(v => v.toFixed(3))).size;
+  log(`Unique sample values: ${uniques}/1000 (low number = timer-limited)`);
+
+  log("");
+  log("=== Done ===");
+  $("btnRun").disabled = false;
+});
+
+boot();
+</script>
+</body>
+</html>
