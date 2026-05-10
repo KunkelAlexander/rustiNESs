@@ -5,44 +5,45 @@ use crate::cpu::Olc6502;
 use crate::ppu::Olc2c02;
 use crate::cartridge::Cartridge;
 
-pub struct Nes {
-    cpu: Olc6502<Bus<Cartridge>>,
-    bus: Bus<Cartridge>,
-    system_clock_counter: u32,
-    audio_buffer: Vec<f32>,
-    sine_phase:   f32,
-    audio_time:   f64,
-}
 
 
 // System clock rate (NTSC): CPU 1,789,773 Hz × 3 = 5,369,319 system clocks/sec
 const SYSTEM_CLOCK_RATE: f64 = 5_369_319.0;
 const AUDIO_SAMPLE_RATE: f64 = 44_100.0;
+const AUDIO_BUFFER_SIZE: usize = 1024; // enough for one frame (~735 samples)
+
+pub struct Nes {
+    cpu: Olc6502<Bus<Cartridge>>,
+    bus: Bus<Cartridge>,
+    system_clock_counter: u32,
+    audio_buffer: [f32; AUDIO_BUFFER_SIZE],
+    audio_buffer_len: usize,
+    sine_phase:   f32,
+    audio_time:   f64,
+}
 
 
 impl Nes {
     pub fn new() -> Self {
         Self {
-            cpu:                  Olc6502::new(),
-            bus:                  Bus::new(Cartridge::new()),
-            system_clock_counter: 0,
-            audio_buffer:         Vec::new(),
-            sine_phase:           0.0,
-            audio_time:           0.0,
+            cpu:                    Olc6502::new(),
+            bus:                    Bus::new(Cartridge::new()),
+            system_clock_counter:   0,
+            audio_buffer:           [0.0; AUDIO_BUFFER_SIZE],
+            audio_buffer_len:       0,
+            sine_phase:             0.0,
+            audio_time:             0.0,
         }
     }
 
-    // This is a dummy method for testing
-    pub fn generate_audio_frame(&mut self) {
-        for _ in 0..735 {
-            self.audio_buffer.push((self.sine_phase * std::f32::consts::TAU).sin() as f32 * 0.3);
-            self.sine_phase = (self.sine_phase + 440.0 / 44100.0).fract();
-        }
+    pub fn audio_ptr(&self) -> *const f32 {
+        self.audio_buffer.as_ptr()
     }
 
-    pub fn drain_audio_samples(&mut self) -> Vec<f32> {
-        std::mem::take(&mut self.audio_buffer)
+    pub fn audio_len(&self) -> usize {
+        self.audio_buffer_len
     }
+
     pub fn reset(&mut self) {
         self.bus.reset();
         self.cpu.reset(&mut self.bus);
@@ -103,6 +104,8 @@ impl Nes {
     }
 
     pub fn run_frame(&mut self) {
+        self.audio_buffer_len = 0; 
+
         while !self.bus.ppu.frame_complete {
             self.clock();  // advances APU + PPU + CPU timing
 
@@ -110,7 +113,10 @@ impl Nes {
             self.audio_time += 1.0;
             if self.audio_time >= SYSTEM_CLOCK_RATE / AUDIO_SAMPLE_RATE {
                 self.audio_time -= SYSTEM_CLOCK_RATE / AUDIO_SAMPLE_RATE;
-                self.audio_buffer.push(self.bus.apu.get_output_sample());
+                if self.audio_buffer_len < AUDIO_BUFFER_SIZE {
+                    self.audio_buffer[self.audio_buffer_len] = self.bus.apu.get_output_sample();
+                    self.audio_buffer_len += 1;
+                }
             }
         }
 

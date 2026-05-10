@@ -12,7 +12,7 @@ pub use nes::Nes;
 use std::fs;
 
 fn main() -> std::io::Result<()> {
-    let rom_path = r"roms/dk.nes";
+    let rom_path = r"roms/smb.nes";
 
     // read file into bytes
     let bytes = fs::read(rom_path).expect("failed to read ROM");

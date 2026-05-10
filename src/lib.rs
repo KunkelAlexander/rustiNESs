@@ -80,7 +80,12 @@ impl NES {
             .set_controller(i, x, z, a, s, up, down, left, right);
     }
 
-    pub fn get_audio_samples(&mut self) -> Vec<f32> {
-        self.inner.drain_audio_samples()
+    
+    pub fn audio_buffer_ptr(&self) -> *const f32 {
+        self.inner.audio_ptr()
+    }
+
+    pub fn audio_buffer_len(&self) -> usize {
+        self.inner.audio_len()
     }
 }
