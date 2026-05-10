@@ -394,8 +394,21 @@ let dbg_fpsTimestamp  = 0;
 let dbg_fps           = 0;
 let dbg_framesThisTick = 0;
 let dbg_driftMax      = 0;
-function frame() {
+
+const TARGET_FRAME_MS = 1000 / 60.0988;  // ~16.639 ms
+let lastRenderTime    = 0;
+
+function frame(timestamp) {
   if (!running) return;
+
+  // Throttle render to NES framerate — skips on high-refresh-rate displays
+  // (90 Hz phones, 120 Hz tablets) so we don't burn GPU for no benefit.
+  const elapsed = timestamp - lastRenderTime;
+  if (elapsed < TARGET_FRAME_MS - 1) {   // -1 ms tolerance for scheduler jitter
+    rafHandle = requestAnimationFrame(frame);
+    return;
+  }
+  lastRenderTime = timestamp - (elapsed % TARGET_FRAME_MS);
   
   const t0 = performance.now();
   let tWasm = 0, tRender = 0, tUI = 0;
@@ -467,6 +480,7 @@ function startRun() {
   if (!emu || running) return;
   running = true;
   audioBufferLevel = 0;
+  lastRenderTime = 0;
   startPump();
   rafHandle = requestAnimationFrame(frame);
   if (mode !== "fullscreen") log("Run started");
