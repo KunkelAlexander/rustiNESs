@@ -81,11 +81,11 @@ impl NES {
     }
 
     
-    pub fn audio_buffer_ptr(&self) -> *const f32 {
+    pub fn audio_ptr(&self) -> *const f32 {
         self.inner.audio_ptr()
     }
 
-    pub fn audio_buffer_len(&self) -> usize {
+    pub fn audio_len(&self) -> usize {
         self.inner.audio_len()
     }
 }

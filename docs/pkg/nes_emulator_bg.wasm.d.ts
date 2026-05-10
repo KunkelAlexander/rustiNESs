@@ -2,11 +2,12 @@
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
 export const __wbg_nes_free: (a: number, b: number) => void;
+export const nes_audio_len: (a: number) => number;
+export const nes_audio_ptr: (a: number) => number;
 export const nes_clock: (a: number) => void;
 export const nes_cpu_clock: (a: number) => void;
 export const nes_frame_len: (a: number) => number;
 export const nes_frame_ptr: (a: number) => number;
-export const nes_get_audio_samples: (a: number) => [number, number];
 export const nes_get_cpu_state: (a: number) => [number, number];
 export const nes_get_pattern_table: (a: number, b: number, c: number) => [number, number];
 export const nes_get_ram: (a: number, b: number, c: number) => [number, number];

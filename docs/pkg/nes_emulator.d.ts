@@ -4,11 +4,12 @@
 export class NES {
     free(): void;
     [Symbol.dispose](): void;
+    audio_len(): number;
+    audio_ptr(): number;
     clock(): void;
     cpu_clock(): void;
     frame_len(): number;
     frame_ptr(): number;
-    get_audio_samples(): Float32Array;
     get_cpu_state(): Uint32Array;
     get_pattern_table(table: number, palette: number): Uint8Array;
     get_ram(start: number, len: number): Uint8Array;
@@ -27,11 +28,12 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly __wbg_nes_free: (a: number, b: number) => void;
+    readonly nes_audio_len: (a: number) => number;
+    readonly nes_audio_ptr: (a: number) => number;
     readonly nes_clock: (a: number) => void;
     readonly nes_cpu_clock: (a: number) => void;
     readonly nes_frame_len: (a: number) => number;
     readonly nes_frame_ptr: (a: number) => number;
-    readonly nes_get_audio_samples: (a: number) => [number, number];
     readonly nes_get_cpu_state: (a: number) => [number, number];
     readonly nes_get_pattern_table: (a: number, b: number, c: number) => [number, number];
     readonly nes_get_ram: (a: number, b: number, c: number) => [number, number];

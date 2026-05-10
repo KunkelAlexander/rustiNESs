@@ -38,6 +38,19 @@ This project was written by hand as a learning exercise. I mainly used LLMs for 
 
 ![](figures/34.png)
 
+- But - sound sounds terrible with a square pulse wave - so we actually approximate it using a Fourier transform 
+- Using a real sine function for this Fourier transform is terribly slow - so we actually use a fast approximation
+- After implementing both pulse wave channels, the sound actually starts sounding okay
+- But performance is still an issue - my emulator is too slow. With audio, the performance dropped to 10 ms per frame.
+    - 29% of total emulation time is spent in the fast sine approximation
+    - 8% is spent in the loop adding the harmonics
+- After some research, I decided that wavetables are the way to go - We precompute the waveforms at a given temporal resolution for different duty cycles
+    - This requires more RAM (4096 * 4 * 4 bytes for f32 = 64 KB) but makes the wave sampling a simple array 
+- With the wavetable, performance is below 5 ms per frame again - I checked this in my browser using the WASM interface with a script Claude kindly provided ([benchmark.html](docs\benchmark.html))
+
+
+![](figures/35.png)
+
 ### Day 13: 01.05.2025
 - Watch [NES Emulator Part #6: APU - Sounds, Beeps & Bloops](https://www.youtube.com/watch?v=72dI7dB3ZvQ)
 - Sound is unforgiving - we need to make sure that the timing is perfect

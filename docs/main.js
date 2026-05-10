@@ -268,6 +268,20 @@ async function initAudio() {
   // Track buffer level reported back from worklet
   nesNode.port.onmessage = ({data}) => { audioBufferLevel = data; };
 }
+
+
+function getAudioView() {
+    if (!audioView || audioView.buffer !== wasmMemory.buffer) {
+        audioView = new Float32Array(
+            wasmMemory.buffer,
+            emu.audio_ptr(),
+            1024  // max size, we'll only read audio_len() samples
+        );
+    }
+    return audioView;
+}
+
+
 // ═══════════════════════════════════════════════════════
 //  Run loops
 //  Three independent loops: cpu-debug, nes-debug, nes-fullscreen
@@ -325,7 +339,10 @@ function frame() {
       
       // Still drain audio samples so they don't accumulate WASM-side
       // (but don't post them — we're testing render path only)
-      emu.get_audio_samples();
+            
+      // In your frame loop, replace emu.get_audio_samples() with:
+      const samples = getAudioView().subarray(0, emu.audio_len());
+      //nesNode.port.postMessage(samples);
       
       const b = performance.now();
       renderFullscreenFrame();
