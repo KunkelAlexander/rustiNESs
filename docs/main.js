@@ -10,7 +10,10 @@ let rafHandle  = null;
 let audioCtx   = null;
 let nesNode    = null;
 let audioBufferLevel = 0;
-let audioView  = null; 
+const AUDIO_BUF_SAMPLES = 1024;             // upper bound for one frame's audio
+const AUDIO_POOL_INITIAL = 4;
+const audioBufferPool = [];                 // ArrayBuffer[]
+
 let wasmMemory = null; 
 let frameView  = null;
 
@@ -238,30 +241,70 @@ function renderPatternTables() {
 // ═══════════════════════════════════════════════════════
 async function initAudio() {
   const blob = new Blob([`
-    class NESProcessor extends AudioWorkletProcessor {
-      constructor() {
-        super();
-        this.ring = new Float32Array(65536);
-        this.w = 0; this.r = 0;
-        this.port.onmessage = ({data}) => {
-          for (const s of data) {
-            if (this.w - this.r > 8192) this.r = this.w - 4096;
-            this.ring[this.w++ % 65536] = s;
-          }
-        };
-      }
-      process(_, outputs) {
-        const out = outputs[0][0];
-        const available = this.w - this.r;
-        // Report buffer level back to main thread every 128 samples
-        if (++this.tick % 128 === 0) this.port.postMessage(available);
-        if (available < out.length) { out.fill(0); return true; }
-        for (let i = 0; i < out.length; i++) out[i] = this.ring[this.r++ % 65536];
-        return true;
-      }
+  class NESProcessor extends AudioWorkletProcessor {
+    constructor() {
+      super();
+      this.RING = 16384;
+      this.MASK = this.RING - 1;
+      this.ring = new Float32Array(this.RING);
+      this.r = 0;
+      this.w = 0;
+      this.lastReportedR = 0;
+      this.tick = 0;
+
+      this.port.onmessage = ({ data }) => {
+        // Reset signal from main thread
+        if (data && data.type === "reset") {
+          this.r = 0; this.w = 0; this.lastReportedR = 0;
+          return;
+        }
+
+        // Otherwise it's a Float32Array of samples (buffer was transferred to us)
+        const buf = data;
+        const len = buf.length;
+        const free = this.RING - (this.w - this.r);
+        if (len > free) {
+          // Should never happen with proper pacing; drop oldest, never tear
+          this.r = this.w - (this.RING - len);
+        }
+
+        const writePos = this.w & this.MASK;
+        const first = Math.min(len, this.RING - writePos);
+        this.ring.set(buf.subarray(0, first), writePos);
+        if (first < len) this.ring.set(buf.subarray(first), 0);
+        this.w += len;
+
+        // Bounce the ArrayBuffer back to main for reuse — zero-copy
+        this.port.postMessage(buf.buffer, [buf.buffer]);
+      };
     }
-    registerProcessor("nes-processor", NESProcessor);
-  `], { type: "application/javascript" });
+
+    process(_, outputs) {
+      const out = outputs[0][0];
+      const need = out.length;
+      const available = this.w - this.r;
+
+      // Report consumption delta every ~23 ms (8 quanta at 128/44100)
+      if ((++this.tick & 7) === 0) {
+        const delta = this.r - this.lastReportedR;
+        if (delta > 0) {
+          this.lastReportedR = this.r;
+          this.port.postMessage({ type: "consumed", n: delta });
+        }
+      }
+
+      if (available < need) { out.fill(0); return true; }
+
+      const readPos = this.r & this.MASK;
+      const first = Math.min(need, this.RING - readPos);
+      out.set(this.ring.subarray(readPos, readPos + first));
+      if (first < need) out.set(this.ring.subarray(0, need - first), first);
+      this.r += need;
+      return true;
+    }
+  }
+  registerProcessor("nes-processor", NESProcessor);
+`], { type: "application/javascript" });
 
   audioCtx = new AudioContext({ sampleRate: 44100 });
   console.log("actual sampleRate:", audioCtx.sampleRate);  // add this
@@ -271,21 +314,69 @@ async function initAudio() {
   nesNode.connect(audioCtx.destination);
 
   // Track buffer level reported back from worklet
-  nesNode.port.onmessage = ({data}) => { audioBufferLevel = data; };
-}
-
-
-function getAudioView() {
-    if (!audioView || audioView.buffer !== wasmMemory.buffer) {
-        audioView = new Float32Array(
-            wasmMemory.buffer,
-            emu.audio_ptr(),
-            1024  // max size, we'll only read audio_len() samples
-        );
+  nesNode.port.onmessage = ({ data }) => {
+    if (data instanceof ArrayBuffer) {
+      // Worklet returned a buffer — back into the pool
+      audioBufferPool.push(data);
+    } else if (data && data.type === "consumed") {
+      // Worklet consumed `n` samples since last report
+      audioBufferLevel = Math.max(0, audioBufferLevel - data.n);
     }
-    return audioView;
+  };
+
+  initAudioBufferPool();
 }
 
+
+
+
+function initAudioBufferPool() {
+  for (let i = 0; i < AUDIO_POOL_INITIAL; i++) {
+    audioBufferPool.push(new ArrayBuffer(AUDIO_BUF_SAMPLES * 4));
+  }
+}
+
+const TARGET_FILL_MS = 100;
+let TARGET_FILL_SAMPLES = 0;
+let pumpHandle = null;
+
+function startPump() {
+  if (pumpHandle) return;
+  TARGET_FILL_SAMPLES = (audioCtx.sampleRate * TARGET_FILL_MS / 1000) | 0;
+  pumpHandle = setInterval(pump, 4);
+}
+
+function stopPump() {
+  if (pumpHandle) { clearInterval(pumpHandle); pumpHandle = null; }
+}
+
+function pump() {
+  if (!running) return;
+  if (mode !== "nes" && mode !== "fullscreen") return;
+  if (!nesNode || audioCtx.state !== "running") return;
+
+  // Run frames until we're at or above target. Safety cap stops runaway
+  // catch-up after a tab-throttle gap.
+  let safety = 8;
+  while (audioBufferLevel < TARGET_FILL_SAMPLES && safety-- > 0 && running) {
+    emu.run_frame();
+    const len = emu.audio_len();
+    if (len === 0) break;
+
+    // Re-derive WASM view each call — buffer can detach on heap growth
+    const src = new Float32Array(wasmMemory.buffer, emu.audio_ptr(), len);
+
+    let buf = audioBufferPool.pop();
+    if (!buf || buf.byteLength < len * 4) {
+      buf = new ArrayBuffer(Math.max(AUDIO_BUF_SAMPLES, len) * 4);
+    }
+    const dst = new Float32Array(buf, 0, len);
+    dst.set(src);
+
+    nesNode.port.postMessage(dst, [buf]);   // transfer, no copy, no GC
+    audioBufferLevel += len;
+  }
+}
 
 // ═══════════════════════════════════════════════════════
 //  Run loops
@@ -315,40 +406,21 @@ function frame() {
       updateDebugUI();
       
     } else if (mode === "nes") {
-      const a = performance.now();
-      emu.run_frame();
-      tWasm = performance.now() - a;
-      
       const b = performance.now();
       renderDebugFrame();
       tRender = performance.now() - b;
-      
+
       patternFrameCounter++;
       if (patternFrameCounter >= 60) { renderPatternTables(); patternFrameCounter = 0; }
-      
+
       const c = performance.now();
       updateDebugUI();
       tUI = performance.now() - c;
-      
+
     } else if (mode === "fullscreen") {
       dbg_rafCount++;
       if (dbg_rafCount === 1) dbg_fpsTimestamp = performance.now();
-      
-      // Pure RAF-driven: one frame per tick, no audio sync, no audio output
-      const a = performance.now();
-      const before = wasmMemory.buffer.byteLength;
-      emu.run_frame();
-      const after = wasmMemory.buffer.byteLength;
-      if (after !== before) console.warn(`WASM memory grew: ${before} → ${after} bytes`);
-      tWasm = performance.now() - a;
-      
-      // Still drain audio samples so they don't accumulate WASM-side
-      // (but don't post them — we're testing render path only)
-            
-      // In your frame loop, replace emu.get_audio_samples() with:
-      const samples = getAudioView().subarray(0, emu.audio_len());
-      //nesNode.port.postMessage(samples);
-      
+
       const b = performance.now();
       renderFullscreenFrame();
       tRender = performance.now() - b;
@@ -379,14 +451,14 @@ function frame() {
     return;
   }
   
-  const total = performance.now() - t0;
-  if (total > 20) {
-    console.warn(
-      `Slow frame: total=${total.toFixed(1)}ms ` +
-      `wasm=${tWasm.toFixed(1)} render=${tRender.toFixed(1)} ui=${tUI.toFixed(1)} ` +
-      `mode=${mode}`
-    );
-  }
+  //const total = performance.now() - t0;
+  //if (total > 20) {
+  //  console.warn(
+  //    `Slow frame: total=${total.toFixed(1)}ms ` +
+  //    `wasm=${tWasm.toFixed(1)} render=${tRender.toFixed(1)} ui=${tUI.toFixed(1)} ` +
+  //    `mode=${mode}`
+  //  );
+  //}
   
   rafHandle = requestAnimationFrame(frame);
 }
@@ -394,12 +466,15 @@ function frame() {
 function startRun() {
   if (!emu || running) return;
   running = true;
+  audioBufferLevel = 0;
+  startPump();
   rafHandle = requestAnimationFrame(frame);
   if (mode !== "fullscreen") log("Run started");
 }
 
 function pauseRun() {
   running = false;
+  stopPump();
   if (rafHandle) { cancelAnimationFrame(rafHandle); rafHandle = null; }
   if (mode !== "fullscreen") log("Paused");
 }
@@ -581,7 +656,16 @@ window.addEventListener("keyup", (e) => {
 
 window.addEventListener("blur", releaseAllButtons);
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden) releaseAllButtons();
+  if (document.hidden) {
+    releaseAllButtons();
+    if (audioCtx?.state === "running") audioCtx.suspend().catch(() => {});
+    stopPump();
+  } else if (running) {
+    if (audioCtx?.state === "suspended") audioCtx.resume().catch(() => {});
+    if (nesNode) nesNode.port.postMessage({ type: "reset" });
+    audioBufferLevel = 0;
+    startPump();
+  }
 });
 
 // ═══════════════════════════════════════════════════════
@@ -636,7 +720,12 @@ function bindUI() {
   // Debug controls
   $("btnReset").addEventListener("click", () => {
     if (!emu) return;
-    pauseRun(); emu.reset(); updateDebugUI(); log("Reset");
+    pauseRun();
+    emu.reset();
+    if (nesNode) nesNode.port.postMessage({ type: "reset" });
+    audioBufferLevel = 0;
+    updateDebugUI();
+    log("Reset");
   });
 
   $("btnClock").addEventListener("click", () => {
@@ -908,6 +997,8 @@ async function loadRomFile(file) {
   const bytes = new Uint8Array(await file.arrayBuffer());
   emu.insert_cartridge(bytes);
   emu.reset();
+  if (nesNode) nesNode.port.postMessage({ type: "reset" });
+  audioBufferLevel = 0;
   updateDebugUI();
   renderPatternTables();
   log(`Loaded ROM: ${file.name} — reset done`);
