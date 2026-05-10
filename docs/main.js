@@ -11,7 +11,10 @@ let audioCtx   = null;
 let nesNode    = null;
 let audioBufferLevel = 0;
 const AUDIO_BUF_SAMPLES = 1024;             // upper bound for one frame's audio
-const AUDIO_POOL_INITIAL = 4;
+const AUDIO_POOL_INITIAL = 8;
+const TARGET_FILL_MS = 120;
+let TARGET_FILL_SAMPLES = 0;
+let pumpHandle = null;
 const audioBufferPool = [];                 // ArrayBuffer[]
 
 let wasmMemory = null; 
@@ -336,9 +339,6 @@ function initAudioBufferPool() {
   }
 }
 
-const TARGET_FILL_MS = 100;
-let TARGET_FILL_SAMPLES = 0;
-let pumpHandle = null;
 
 function startPump() {
   if (pumpHandle) return;
@@ -999,6 +999,7 @@ async function loadRomFile(file) {
   emu.reset();
   if (nesNode) nesNode.port.postMessage({ type: "reset" });
   audioBufferLevel = 0;
+  if (!running) startRun();
   updateDebugUI();
   renderPatternTables();
   log(`Loaded ROM: ${file.name} — reset done`);
@@ -1034,9 +1035,7 @@ async function boot() {
     await initAudio();
     updateDebugUI();
 
-    log("Emulator ready");
-    
-    startRun();
+    log("Emulator ready — load a ROM to start");
   } catch (e) {
     console.error(e);
     setStatus(false, "Failed to load WASM");

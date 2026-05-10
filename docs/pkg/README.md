@@ -2,7 +2,7 @@
 
 A Nintendo Entertainment System (NES) emulator written in Rust, built for learning, experimentation, and clean architecture.
 
-It currently emulates the 6502 CPU, the PPU, controller input, DMA, and Mapper 000, and can already run games like **Donkey Kong** and **Super Mario Bros.**
+It currently emulates the 6502 CPU, the PPU, the APU, controller input, DMA, and Mapper 000, and can already run games like **Donkey Kong** and **Super Mario Bros.**
 
 **Play it in the browser:** [RustiNESs Web](https://kunkelalexander.github.io/rustiNESs/)  
 **Based on:** [javidx9's NES Emulator series](https://www.youtube.com/playlist?list=PLrOv9FMX8xJHqMvSGB_9G9nZZ_4IgteYf)
@@ -20,6 +20,7 @@ This project was written by hand as a learning exercise. I mainly used LLMs for 
 
 - 6502 CPU emulation
 - PPU background and sprite rendering
+- APU (pulse1, pulse2 and noise channels)
 - DMA transfers to OAM
 - Controller input
 - Mapper 000 support
@@ -28,6 +29,10 @@ This project was written by hand as a learning exercise. I mainly used LLMs for 
 
 ## Devlog
 
+
+### Day 15: 10.05.2025
+- Finish pulse2 and noise channel implementation - SMB now sounds nice! 
+- I still have crackling but my understanding is that the best option - syncing to audio - is a bit tricky in Github pages and I don't want to further complicate the code. 
 
 ### Day 14: 09.05.2025
 
@@ -51,7 +56,11 @@ This project was written by hand as a learning exercise. I mainly used LLMs for 
 
 ![](figures/35.png)
 
-- But audio is still slow - I realised that there is a memory leak when we just post arrays to the audio thread. I would really like a better solution. 
+- Add FPS counter in top left corner - SMB seems to be running at a constant 60 FPS with sound now. 
+
+![](figures/36.png) 
+
+
 
 ### Day 13: 01.05.2025
 - Watch [NES Emulator Part #6: APU - Sounds, Beeps & Bloops](https://www.youtube.com/watch?v=72dI7dB3ZvQ)
@@ -464,6 +473,7 @@ src/
 ├── main.rs          # Entry point
 ├── cpu.rs           # 6502 core (registers, execution)
 ├── ppu.rs           # Pixel processing unit - the GPU
+├── apu.rs           # Audio processing unit - the APU 
 ├── cartridge.rs     # Cartridge template
 ├── mapper.rs        # Add more mappers here
 ├── bus.rs           # Contains RAM, PPU, cartridge and controller, but not the CPU to avoid rust's double borrow checks
@@ -482,7 +492,7 @@ tests/               # Harte CPU tests
 - Local application for debugging: `cargo run`
 - WASM library for the web application:  `wasm-pack build --release --target web --out-dir docs/pkg`
 - Test the web application with `python -m http.server` and go to `http://localhost:8000/docs/` in your browser - I tested the application with Firefox
-- Tests: `cargo test --release -- --nocapture`
+- Tests: `cargo test --release -- --nocapture` (uncomment `serde` in `cargo.toml` and download the tests from [here](github.com/SingleStepTests/65x02/tree/main/nes6502)])
 
 
 ## License
