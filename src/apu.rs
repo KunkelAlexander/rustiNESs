@@ -1,18 +1,57 @@
 use crate::{interfaces::{ApuInterface}};
+pub struct OscillatorPulse {
+    frequency:   f32, 
+    duty_cycle:  f32, 
+    duty_idx:    usize,
+    amplitude:   f32, 
+    harmonics:   usize, 
+    phase:       f32,
+}
 
 
-
+// This is still too slow
 fn fast_sin(t: f32) -> f32{
     let mut j = t * 0.15915;
     j = j - j.floor();
     20.785 * j * (j - 0.5) * (j - 1.0)
 }
 
-pub struct OscillatorPulse {
-    frequency:   f32, 
-    duty_cycle:  f32, 
-    amplitude:   f32, 
-    harmonics:   usize, 
+
+
+// We therefore precompute the harmonics
+const TABLE_SIZE: usize = 4096; // temporal resolution
+const DUTY_CYCLES: [f64; 4] = [0.125, 0.25, 0.5, 0.75];
+
+pub struct WaveTable {
+    tables: [[f32; TABLE_SIZE]; 4],
+}
+
+
+impl WaveTable {
+    pub fn new(harmonics: usize) -> Self {
+        // Compute everything in f64 to reduce rounding errors
+        let pi = std::f64::consts::PI;
+        let mut tables = [[0.0; TABLE_SIZE]; 4];
+
+        for (duty_idx, &duty) in DUTY_CYCLES.iter().enumerate() {
+            let p = duty * 2.0 * pi;
+
+            for i in 0..TABLE_SIZE {
+                let t = i as f64 / TABLE_SIZE as f64;  // 0.0 .. 1.0, one full period
+                let mut sum = 0.0;
+
+                for n in 1..harmonics {
+                    let nf = n as f64;
+                    let c  = nf * 2.0 * pi * t;
+                    sum += (f64::sin(c - p * nf) - f64::sin(c)) / nf; // We can use proper sin here since we precompute
+                }
+
+                tables[duty_idx][i] = (sum * (2.0 / pi)) as f32;
+            }
+        }
+
+        Self { tables }
+    }
 }
 
 impl OscillatorPulse {
@@ -21,8 +60,10 @@ impl OscillatorPulse {
         Self {
             frequency:  0., 
             duty_cycle: 0., 
+            duty_idx:   0,
             amplitude:  1., 
             harmonics:  20, 
+            phase:      0.0,
         }
     }
 
@@ -31,24 +72,31 @@ impl OscillatorPulse {
     // https://www.nesdev.org/wiki/APU_Pulse
     // Depending on the output video mode, the pulse square waves will look different
     // We can instead calculate the frequency and sample this nicer Fourier transform
-    pub fn sample(&self, t: f32) -> f32 {
+    pub fn sample_slow(&self, t: f32, _table: &WaveTable) -> f32 {
         let mut a = 0.0;
         let mut b = 0.0; 
         let pi    = std::f32::consts::PI; 
         let p     = self.duty_cycle * 2.0 * pi;
-
         for n in 1..self.harmonics {
             let n = n as f32;
-
             let c = n * self.frequency * 2.0 * pi * t;
             a += -fast_sin(c) / n; 
             b += -fast_sin(c - p * n) / n; 
         } 
-
         (2.0 * self.amplitude / pi) * (a - b)
     }
 
+    // It turned out that sample_slow was still too slow and would use up 60% of the total simulation time
+    // Using wave tables, we precompute the loop over the harmonics and the sine evaluations
+    pub fn sample(&self, t: f32, table: &WaveTable) -> f32 {
+        // Convert time → phase index
+        let phase = (t * self.frequency) % 1.0; // Keep only post-comma digits
+        let idx   = phase * TABLE_SIZE as f32;
+
+        self.amplitude * table.tables[self.duty_idx][idx as usize]
+    }
     
+
 
 }
 
@@ -110,6 +158,7 @@ pub struct Olc2A03 {
     pulse2_sample:       f32,
     pulse2_sequence:     Sequencer, 
     pulse2_osc:          OscillatorPulse,
+    wavetable:           WaveTable,
     clock_counter:       u32, 
     frame_clock_counter: u32, 
     global_time:         f64,
@@ -127,6 +176,7 @@ impl Olc2A03 {
             pulse2_sample:       0.0,
             pulse2_sequence:     Sequencer::new(SequencerKind::Pulse), 
             pulse2_osc:          OscillatorPulse::new(),
+            wavetable:           WaveTable::new(32),
             clock_counter:       0, 
             frame_clock_counter: 0, 
             global_time:         0.0
@@ -176,11 +226,11 @@ impl Olc2A03 {
             //self.pulse1_sample = self.pulse1_sequence.clock(self.pulse1_enable) as f32; 
 
             self.pulse1_osc.frequency = 1789773. / (16. * ((self.pulse1_sequence.reload as f32) + 1.));
-            self.pulse1_sample        = self.pulse1_osc.sample(self.global_time as f32); 
+            self.pulse1_sample        = self.pulse1_osc.sample(self.global_time as f32, &self.wavetable); 
 
             
             self.pulse2_osc.frequency = 1789773. / (16. * ((self.pulse2_sequence.reload as f32) + 1.));
-            self.pulse2_sample        = self.pulse2_osc.sample(self.global_time as f32); 
+            self.pulse2_sample        = self.pulse2_osc.sample(self.global_time as f32, &self.wavetable); 
         }
 
         self.clock_counter        = self.clock_counter.wrapping_add(1);
@@ -222,10 +272,10 @@ impl ApuInterface for Olc2A03 {
             // Set duty cycle of channel 1's pulse wave form
             0x4000 => {
                 match (data & 0xC0) >> 6 {
-                    0x00 => {self.pulse1_sequence.sequence = 0b00000001; self.pulse1_osc.duty_cycle = 0.125;},
-                    0x01 => {self.pulse1_sequence.sequence = 0b00000011; self.pulse1_osc.duty_cycle = 0.250;},
-                    0x02 => {self.pulse1_sequence.sequence = 0b00001111; self.pulse1_osc.duty_cycle = 0.500;},
-                    0x03 => {self.pulse1_sequence.sequence = 0b11111100; self.pulse1_osc.duty_cycle = 0.750;},
+                    0x00 => {self.pulse1_sequence.sequence = 0b00000001; self.pulse1_osc.duty_cycle = 0.125; self.pulse1_osc.duty_idx = 0;},
+                    0x01 => {self.pulse1_sequence.sequence = 0b00000011; self.pulse1_osc.duty_cycle = 0.250; self.pulse1_osc.duty_idx = 1;},
+                    0x02 => {self.pulse1_sequence.sequence = 0b00001111; self.pulse1_osc.duty_cycle = 0.500; self.pulse1_osc.duty_idx = 2;},
+                    0x03 => {self.pulse1_sequence.sequence = 0b11111100; self.pulse1_osc.duty_cycle = 0.750; self.pulse1_osc.duty_idx = 3;},
                     _    => {}
                 }
             }, 
@@ -242,10 +292,10 @@ impl ApuInterface for Olc2A03 {
             // Set duty cycle of channel 2's pulse wave form
             0x4004 =>  {
                 match (data & 0xC0) >> 6 {
-                    0x00 => {self.pulse2_sequence.sequence = 0b00000001; self.pulse2_osc.duty_cycle = 0.125;},
-                    0x01 => {self.pulse2_sequence.sequence = 0b00000011; self.pulse2_osc.duty_cycle = 0.250;},
-                    0x02 => {self.pulse2_sequence.sequence = 0b00001111; self.pulse2_osc.duty_cycle = 0.500;},
-                    0x03 => {self.pulse2_sequence.sequence = 0b11111100; self.pulse2_osc.duty_cycle = 0.750;},
+                    0x00 => {self.pulse2_sequence.sequence = 0b00000001; self.pulse2_osc.duty_cycle = 0.125; self.pulse2_osc.duty_idx = 0;},
+                    0x01 => {self.pulse2_sequence.sequence = 0b00000011; self.pulse2_osc.duty_cycle = 0.250; self.pulse2_osc.duty_idx = 1;},
+                    0x02 => {self.pulse2_sequence.sequence = 0b00001111; self.pulse2_osc.duty_cycle = 0.500; self.pulse2_osc.duty_idx = 2;},
+                    0x03 => {self.pulse2_sequence.sequence = 0b11111100; self.pulse2_osc.duty_cycle = 0.750; self.pulse2_osc.duty_idx = 3;},
                     _    => {}
                 }
             }
