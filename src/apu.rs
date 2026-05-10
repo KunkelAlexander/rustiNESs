@@ -154,6 +154,7 @@ impl Envelope {
     }
 }
 
+#[derive(Clone, Copy)]
 pub enum SequencerKind {
     Pulse,
     Triangle,
@@ -171,7 +172,7 @@ impl Sequencer {
     pub fn new(sequencer_kind: SequencerKind) -> Self {
         Self {
             kind:     sequencer_kind,
-            sequence: 0x00000000, 
+            sequence:  match sequencer_kind { SequencerKind::Noise => 0xDBDB, _ => 0x00000000 },
             timer:    0x0000, 
             reload:   0x0000, 
             output:   0x00,
@@ -190,7 +191,10 @@ impl Sequencer {
                     self.sequence = self.sequence.rotate_right(1)
                 }
                 SequencerKind::Triangle => {},
-                SequencerKind::Noise    => {},
+                SequencerKind::Noise    => {
+                    let s = self.sequence as u16;
+                    self.sequence = (((s & 0x0001) ^ ((s & 0x0002) >> 1)) << 14 | (s & 0x7FFF) >> 1) as u32;
+                },
             }
 
             self.output = (self.sequence & 0x00000001) as u8; 
@@ -235,7 +239,6 @@ impl Sweeper {
         }
     }
 
-    // channel: false for pulse1, true for pulse2 (ones complement vs twos complement negate)
     pub fn clock(&mut self, target: &mut u16, channel: bool) -> bool {
         let mut changed = false;
 
@@ -264,6 +267,7 @@ impl Sweeper {
 }
 
 pub struct Olc2A03 {
+    // Pulse 1 
     pulse1_enable:       bool,
     pulse1_halt:         bool,
     pulse1_sample:       f32,
@@ -273,6 +277,8 @@ pub struct Olc2A03 {
     pulse1_sweep:        Sweeper,
     pulse1_env:          Envelope,
     pulse1_visual:       u16,
+
+    // Pulse 2
     pulse2_enable:       bool,
     pulse2_halt:         bool,
     pulse2_sample:       f32,
@@ -282,6 +288,15 @@ pub struct Olc2A03 {
     pulse2_sweep:        Sweeper,
     pulse2_env:          Envelope,
     pulse2_visual:       u16,
+
+    // Noise 
+    noise_enable:        bool,
+    noise_halt:          bool,
+    noise_output:        f32,
+    noise_sequence:      Sequencer,
+    noise_env:           Envelope,
+    noise_visual:        u16,
+
     wavetable:           WaveTable,
     clock_counter:       u32,
     frame_clock_counter: u32,
@@ -292,6 +307,7 @@ pub struct Olc2A03 {
 impl Olc2A03 {
     pub fn new() -> Self {
         Self {
+            //  Pulse 1 
             pulse1_enable:       true, 
             pulse1_halt:         false, 
             pulse1_sample:       0.0,
@@ -301,6 +317,8 @@ impl Olc2A03 {
             pulse1_sweep:        Sweeper::new(),
             pulse1_env:          Envelope::new(),
             pulse1_visual:       0,
+
+            // Pulse 2 
             pulse2_enable:       true,
             pulse2_halt:         false, 
             pulse2_sample:       0.0,
@@ -310,6 +328,15 @@ impl Olc2A03 {
             pulse2_sweep:        Sweeper::new(),
             pulse2_env:          Envelope::new(),
             pulse2_visual:       0,
+
+            // Noise 
+            noise_enable:        true, 
+            noise_halt:          false, 
+            noise_output:        0.0,
+            noise_sequence:      Sequencer::new(SequencerKind::Noise),
+            noise_env:           Envelope::new(),
+            noise_visual:        0,
+
             wavetable:           WaveTable::new(32),
             clock_counter:       0, 
             frame_clock_counter: 0, 
@@ -350,6 +377,7 @@ impl Olc2A03 {
             if is_quarter_frame_clock {
                 self.pulse1_env.clock(self.pulse1_halt);
                 self.pulse2_env.clock(self.pulse2_halt);
+                self.noise_env.clock( self.noise_halt);
 
             }
 
@@ -373,8 +401,6 @@ impl Olc2A03 {
             self.pulse2_osc.advance(1789773.);
             self.pulse2_sample        = self.pulse2_osc.sample(self.global_time as f32, &self.wavetable); 
 
-            self.pulse1_output = self.pulse1_sample;
-            self.pulse2_output = self.pulse2_sample;
 
 			if self.pulse1_sequence.timer >= 8 && !self.pulse1_sweep.mute && self.pulse1_env.output > 2 {
 				self.pulse1_output += (self.pulse1_sample - self.pulse1_output) * 0.5;
@@ -388,12 +414,22 @@ impl Olc2A03 {
                 self.pulse2_output = 0.0;
             }
 
+            self.noise_sequence.clock(self.noise_enable);
+            if  self.noise_sequence.timer >= 8 {
+                self.noise_output = self.noise_sequence.output as f32 * ((self.noise_env.output - 1) as f32 / 16.0);
+            } else {
+                self.noise_output = 0.0;
+            }
+
             
             if !self.pulse1_enable {
                 self.pulse1_output = 0.0;
             }
             if !self.pulse2_enable  {
                 self.pulse2_output = 0.0;
+            }
+            if !self.noise_enable {
+                self.noise_output = 0.0;
             }
         }
 
@@ -414,6 +450,12 @@ impl Olc2A03 {
             self.pulse2_visual = 2047; 
         }
 
+        if self.noise_enable && self.noise_env.output > 1 {
+            self.noise_visual = self.noise_sequence.reload;
+        } else {
+            self.noise_visual = 2047; 
+        }
+
         self.clock_counter        = self.clock_counter.wrapping_add(1);
     }
 
@@ -432,9 +474,9 @@ impl Olc2A03 {
 
     // Perform the mixing
     pub fn get_output_sample(&self) -> f32 {
-		((1.0 * self.pulse1_output) - 0.8) * 0.1 +
-        ((1.0 * self.pulse2_output) - 0.8) * 0.1
-        // +((2.0 * (self.noise_output - 0.5))) * 0.1
+		((1.0 * self.pulse1_output) - 0.8)  * 0.1 +
+        ((1.0 * self.pulse2_output) - 0.8)  * 0.1 +
+        ((2.0 * (self.noise_output - 0.5))) * 0.1
     }
 }
 
@@ -512,16 +554,42 @@ impl ApuInterface for Olc2A03 {
                 self.pulse2_sequence.timer  = self.pulse2_sequence.reload;
             }, 
             0x4008 => {}, 
-            0x400C => {}, 
-            0x400E => {}, 
+            0x400C => {
+                self.noise_env.volume  = (data & 0x0F) as u16;
+                self.noise_env.disable = (data & 0x10) != 0;
+                self.noise_halt        = (data & 0x20) != 0;
+            }, 
+            0x400E => {
+                match data & 0x0F {
+                    0x00 => {self.noise_sequence.reload = 0;   }
+                    0x01 => {self.noise_sequence.reload = 4;   }
+                    0x02 => {self.noise_sequence.reload = 8;   }
+                    0x03 => {self.noise_sequence.reload = 16;  }
+                    0x04 => {self.noise_sequence.reload = 32;  }
+                    0x05 => {self.noise_sequence.reload = 64;  }
+                    0x06 => {self.noise_sequence.reload = 96;  }
+                    0x07 => {self.noise_sequence.reload = 128; }
+                    0x08 => {self.noise_sequence.reload = 160; }
+                    0x09 => {self.noise_sequence.reload = 202; }
+                    0x0A => {self.noise_sequence.reload = 254; }
+                    0x0B => {self.noise_sequence.reload = 380; }
+                    0x0C => {self.noise_sequence.reload = 508; }
+                    0x0D => {self.noise_sequence.reload = 1016;}
+                    0x0E => {self.noise_sequence.reload = 2034;}
+                    0x0F => {self.noise_sequence.reload = 4068;}
+                    _    => {}
+                }
+            }, 
             // Enable and disable pulse 1 sequencer
             0x4015 => {
                 self.pulse1_enable = (data & 0x01) != 0;
                 self.pulse2_enable = (data & 0x02) != 0;
+                self.noise_enable  = (data & 0x04) != 0;
             }, 
             0x400F => {       
                 self.pulse1_env.start = true;
                 self.pulse2_env.start = true;
+                self.noise_env.start  = true;
             }, 
             _      => {},
         };
