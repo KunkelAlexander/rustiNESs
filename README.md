@@ -13,7 +13,7 @@ It currently emulates the 6502 CPU, the PPU, the APU, controller input, DMA, and
 
 ## Learning Approach
 
-This project was written by hand as a learning exercise. I mainly used LLMs for explanations, discussion, and a few repetitive tasks, while keeping the emulator implementation itself manual.
+This Rust project was written by hand as a learning exercise. I mainly used LLMs for explanations, discussion, and a few repetitive tasks, while keeping the emulator implementation in Rust itself manual. The JS/HTML GUI was written using Claude. 
 
 
 ## Features
@@ -25,7 +25,7 @@ This project was written by hand as a learning exercise. I mainly used LLMs for 
 - Controller input
 - Mapper 000 support
 - WebAssembly browser build
-- CPU validation using Harte tests (you need to download those manually)
+- CPU validation using Harte tests (you need to download these manually from [here]([here](https://github.com/SingleStepTests/65x02/tree/main/nes6502)))
 
 ## Devlog
 
