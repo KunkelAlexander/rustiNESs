@@ -2,7 +2,7 @@
 
 A Nintendo Entertainment System (NES) emulator written in Rust, built for learning, experimentation, and clean architecture.
 
-It currently emulates the 6502 CPU, the PPU, controller input, DMA, and Mapper 000, and can already run games like **Donkey Kong** and **Super Mario Bros.**
+It currently emulates the 6502 CPU, the PPU, the APU, controller input, DMA, and Mapper 000, and can already run games like **Donkey Kong** and **Super Mario Bros.**
 
 **Play it in the browser:** [RustiNESs Web](https://kunkelalexander.github.io/rustiNESs/)  
 **Based on:** [javidx9's NES Emulator series](https://www.youtube.com/playlist?list=PLrOv9FMX8xJHqMvSGB_9G9nZZ_4IgteYf)
@@ -20,6 +20,7 @@ This project was written by hand as a learning exercise. I mainly used LLMs for 
 
 - 6502 CPU emulation
 - PPU background and sprite rendering
+- APU (pulse 1, pulse 2, noise)
 - DMA transfers to OAM
 - Controller input
 - Mapper 000 support
@@ -28,6 +29,9 @@ This project was written by hand as a learning exercise. I mainly used LLMs for 
 
 ## Devlog
 
+
+### Day 15: 09.05.2025
+- Noise now works to the point where SMB sounds nice !
 
 ### Day 14: 09.05.2025
 
@@ -466,6 +470,7 @@ src/
 ├── main.rs          # Entry point
 ├── cpu.rs           # 6502 core (registers, execution)
 ├── ppu.rs           # Pixel processing unit - the GPU
+├── apu.rs           # Audio processing unit - the APU
 ├── cartridge.rs     # Cartridge template
 ├── mapper.rs        # Add more mappers here
 ├── bus.rs           # Contains RAM, PPU, cartridge and controller, but not the CPU to avoid rust's double borrow checks
@@ -484,7 +489,7 @@ tests/               # Harte CPU tests
 - Local application for debugging: `cargo run`
 - WASM library for the web application:  `wasm-pack build --release --target web --out-dir docs/pkg`
 - Test the web application with `python -m http.server` and go to `http://localhost:8000/docs/` in your browser - I tested the application with Firefox
-- Tests: `cargo test --release -- --nocapture`
+- Tests: `cargo test --release -- --nocapture` (uncomment `serde` in `cargo.toml` and download tests [here](https://github.com/SingleStepTests/65x02/tree/main/nes6502))
 
 
 ## License
