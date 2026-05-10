@@ -203,24 +203,88 @@ impl Sequencer {
     }
 }
 
+pub struct Sweeper {
+    enabled: bool,
+    down:    bool,
+    reload:  bool,
+    shift:   u8,
+    timer:   u8,
+    period:  u8,
+    change:  u16,
+    mute:    bool,
+}
+
+impl Sweeper {
+    pub fn new() -> Self {
+        Self {
+            enabled: false,
+            down:    false,
+            reload:  false,
+            shift:   0x00,
+            timer:   0x00,
+            period:  0x00,
+            change:  0,
+            mute:    false,
+        }
+    }
+
+    pub fn track(&mut self, target: u16) {
+        if self.enabled {
+            self.change = target >> self.shift;
+            self.mute   = (target < 8) || (target > 0x7FF);
+        }
+    }
+
+    // channel: false for pulse1, true for pulse2 (ones complement vs twos complement negate)
+    pub fn clock(&mut self, target: &mut u16, channel: bool) -> bool {
+        let mut changed = false;
+
+        if self.timer == 0 && self.enabled && self.shift > 0 && !self.mute {
+            if *target >= 8 && self.change < 0x07FF {
+                if self.down {
+                    *target -= self.change - channel as u16;
+                } else {
+                    *target += self.change;
+                }
+                changed = true;
+            }
+        }
+
+        if self.timer == 0 || self.reload {
+            self.timer  = self.period;
+            self.reload = false;
+        } else {
+            self.timer -= 1;
+        }
+
+        self.mute = (*target < 8) || (*target > 0x7FF);
+
+        changed
+    }
+}
+
 pub struct Olc2A03 {
-    pulse1_enable:       bool, 
+    pulse1_enable:       bool,
     pulse1_halt:         bool,
     pulse1_sample:       f32,
     pulse1_output:       f32,
-    pulse1_sequence:     Sequencer, 
+    pulse1_sequence:     Sequencer,
     pulse1_osc:          OscillatorPulse,
-    pulse2_enable:       bool, 
-    pulse2_halt:         bool, 
+    pulse1_sweep:        Sweeper,
+    pulse1_env:          Envelope,
+    pulse1_visual:       u16,
+    pulse2_enable:       bool,
+    pulse2_halt:         bool,
     pulse2_sample:       f32,
     pulse2_output:       f32,
-    pulse2_sequence:     Sequencer, 
+    pulse2_sequence:     Sequencer,
     pulse2_osc:          OscillatorPulse,
-    pulse1_env:          Envelope,
+    pulse2_sweep:        Sweeper,
     pulse2_env:          Envelope,
+    pulse2_visual:       u16,
     wavetable:           WaveTable,
-    clock_counter:       u32, 
-    frame_clock_counter: u32, 
+    clock_counter:       u32,
+    frame_clock_counter: u32,
     global_time:         f64,
 }
 
@@ -232,16 +296,20 @@ impl Olc2A03 {
             pulse1_halt:         false, 
             pulse1_sample:       0.0,
             pulse1_output:       0.0,
-            pulse1_sequence:     Sequencer::new(SequencerKind::Pulse), 
+            pulse1_sequence:     Sequencer::new(SequencerKind::Pulse),
             pulse1_osc:          OscillatorPulse::new(),
-            pulse2_enable:       true, 
+            pulse1_sweep:        Sweeper::new(),
+            pulse1_env:          Envelope::new(),
+            pulse1_visual:       0,
+            pulse2_enable:       true,
             pulse2_halt:         false, 
             pulse2_sample:       0.0,
             pulse2_output:       0.0,
-            pulse2_sequence:     Sequencer::new(SequencerKind::Pulse), 
+            pulse2_sequence:     Sequencer::new(SequencerKind::Pulse),
             pulse2_osc:          OscillatorPulse::new(),
-            pulse1_env:          Envelope::new(),
+            pulse2_sweep:        Sweeper::new(),
             pulse2_env:          Envelope::new(),
+            pulse2_visual:       0,
             wavetable:           WaveTable::new(32),
             clock_counter:       0, 
             frame_clock_counter: 0, 
@@ -286,7 +354,8 @@ impl Olc2A03 {
             }
 
             if is_half_frame_clock {
-
+                self.pulse1_sweep.clock(&mut self.pulse1_sequence.reload, false);
+                self.pulse2_sweep.clock(&mut self.pulse2_sequence.reload, true);
             }
 
             
@@ -307,13 +376,42 @@ impl Olc2A03 {
             self.pulse1_output = self.pulse1_sample;
             self.pulse2_output = self.pulse2_sample;
 
-            if !self.pulse1_enable && self.pulse1_env.output <= 2 {
+			if self.pulse1_sequence.timer >= 8 && !self.pulse1_sweep.mute && self.pulse1_env.output > 2 {
+				self.pulse1_output += (self.pulse1_sample - self.pulse1_output) * 0.5;
+            } else {
                 self.pulse1_output = 0.0;
             }
-            if !self.pulse2_enable && self.pulse2_env.output <= 2 {
+            
+			if self.pulse2_sequence.timer >= 8 && !self.pulse2_sweep.mute && self.pulse2_env.output > 2 {
+				self.pulse2_output += (self.pulse2_sample - self.pulse2_output) * 0.5;
+            } else {
                 self.pulse2_output = 0.0;
             }
 
+            
+            if !self.pulse1_enable {
+                self.pulse1_output = 0.0;
+            }
+            if !self.pulse2_enable  {
+                self.pulse2_output = 0.0;
+            }
+        }
+
+        
+        self.pulse1_sweep.track(self.pulse1_sequence.reload);
+        self.pulse2_sweep.track(self.pulse2_sequence.reload);
+
+        if self.pulse1_enable && self.pulse1_env.output > 1 && !self.pulse1_sweep.mute {
+            self.pulse1_visual = self.pulse1_sequence.reload;
+        } else {
+            self.pulse1_visual = 2047; 
+        }
+
+        
+        if self.pulse2_enable && self.pulse2_env.output > 1 && !self.pulse2_sweep.mute {
+            self.pulse2_visual = self.pulse2_sequence.reload;
+        } else {
+            self.pulse2_visual = 2047; 
         }
 
         self.clock_counter        = self.clock_counter.wrapping_add(1);
@@ -334,7 +432,9 @@ impl Olc2A03 {
 
     // Perform the mixing
     pub fn get_output_sample(&self) -> f32 {
-        (self.pulse1_output + self.pulse2_output) as f32
+		((1.0 * self.pulse1_output) - 0.8) * 0.1 +
+        ((1.0 * self.pulse2_output) - 0.8) * 0.1
+        // +((2.0 * (self.noise_output - 0.5))) * 0.1
     }
 }
 
@@ -366,7 +466,13 @@ impl ApuInterface for Olc2A03 {
                 self.pulse1_env.volume  = (data & 0x0F) as u16;
                 self.pulse1_env.disable = (data & 0x10) != 0;
             }, 
-            0x4001 => {}, 
+            0x4001 => {
+                self.pulse1_sweep.enabled = data & 0x80 != 0;
+                self.pulse1_sweep.period  = (data & 0x70) >> 4;
+                self.pulse1_sweep.down    = data & 0x08 != 0;
+                self.pulse1_sweep.shift   = data & 0x07;
+                self.pulse1_sweep.reload  = true;
+            }, 
             // Control pulse 1 sequencer reload value - first 8 bits
             0x4002 => {
                 self.pulse1_sequence.reload = (self.pulse1_sequence.reload & 0xFF00) | data as u16;
@@ -390,7 +496,14 @@ impl ApuInterface for Olc2A03 {
                 self.pulse2_env.volume  = (data & 0x0F) as u16;
                 self.pulse2_env.disable = (data & 0x10) != 0;
             }
-            0x4005 => {}, 
+            0x4005 => {
+                self.pulse2_sweep.enabled = data & 0x80 != 0;
+                self.pulse2_sweep.period  = (data & 0x70) >> 4;
+                self.pulse2_sweep.down    = data & 0x08 != 0;
+                self.pulse2_sweep.shift   = data & 0x07;
+                self.pulse2_sweep.reload  = true;
+
+            }, 
             0x4006 => {
                 self.pulse2_sequence.reload = (self.pulse2_sequence.reload & 0xFF00) | data as u16;
             }, 
