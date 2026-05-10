@@ -88,14 +88,22 @@ impl OscillatorPulse {
 
     // It turned out that sample_slow was still too slow and would use up 60% of the total simulation time
     // Using wave tables, we precompute the loop over the harmonics and the sine evaluations
-    pub fn sample(&self, t: f32, table: &WaveTable) -> f32 {
+    pub fn sample(&self, _t: f32, table: &WaveTable) -> f32 {
         // Convert time → phase index
-        let phase = (t * self.frequency) % 1.0; // Keep only post-comma digits
-        let idx   = phase * TABLE_SIZE as f32;
+        let idx   = self.phase * TABLE_SIZE as f32;
 
         self.amplitude * table.tables[self.duty_idx][idx as usize]
     }
-    
+
+    // Ideally, we would compute phase = (t * freq) % 1.0 in sample
+    // But this is very slow
+    // So, here we advance the phase in a separate step to reduce the fmod calls
+    pub fn advance(&mut self, sample_rate: f32) {
+        self.phase += self.frequency / sample_rate;
+        if self.phase >= 1.0 {
+            self.phase -= 1.0;
+        }
+    }
 
 
 }
@@ -226,10 +234,12 @@ impl Olc2A03 {
             //self.pulse1_sample = self.pulse1_sequence.clock(self.pulse1_enable) as f32; 
 
             self.pulse1_osc.frequency = 1789773. / (16. * ((self.pulse1_sequence.reload as f32) + 1.));
+            self.pulse1_osc.advance(1789773.);
             self.pulse1_sample        = self.pulse1_osc.sample(self.global_time as f32, &self.wavetable); 
 
             
             self.pulse2_osc.frequency = 1789773. / (16. * ((self.pulse2_sequence.reload as f32) + 1.));
+            self.pulse2_osc.advance(1789773.);
             self.pulse2_sample        = self.pulse2_osc.sample(self.global_time as f32, &self.wavetable); 
         }
 
