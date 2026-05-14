@@ -193,7 +193,7 @@ pub struct Sequencer {
     timer:    u16,
     reload:   u16,
     output:   u8,
-    pub mode: bool, // noise only: false=bit1 feedback (long), true=bit6 feedback (short/periodic)
+    pub mode: bool, 
 }
 
 impl Sequencer {
@@ -386,7 +386,8 @@ impl Olc2A03 {
         let mut is_quarter_frame_clock = false; 
         let mut is_half_frame_clock    = false; 
 
-        self.global_time += 1. / 1789773. / 3.;
+        const TIME_STEP: f64 = 1.0 / (1789773.0 * 3.0);
+        self.global_time += TIME_STEP;
 
         if self.clock_counter % 6 == 0 {
             self.frame_clock_counter = self.frame_clock_counter.wrapping_add(1);
@@ -472,32 +473,30 @@ impl Olc2A03 {
             if !self.noise_enable {
                 self.noise_output = 0.0;
             }
+
+            self.pulse1_sweep.track(self.pulse1_sequence.reload);
+            self.pulse2_sweep.track(self.pulse2_sequence.reload);
+
+            if self.pulse1_enable && self.pulse1_env.output > 1 && !self.pulse1_sweep.mute {
+                self.pulse1_visual = self.pulse1_sequence.reload;
+            } else {
+                self.pulse1_visual = 2047;
+            }
+
+            if self.pulse2_enable && self.pulse2_env.output > 1 && !self.pulse2_sweep.mute {
+                self.pulse2_visual = self.pulse2_sequence.reload;
+            } else {
+                self.pulse2_visual = 2047;
+            }
+
+            if self.noise_enable && self.noise_env.output > 1 {
+                self.noise_visual = self.noise_sequence.reload;
+            } else {
+                self.noise_visual = 2047;
+            }
         }
 
-        
-        self.pulse1_sweep.track(self.pulse1_sequence.reload);
-        self.pulse2_sweep.track(self.pulse2_sequence.reload);
-
-        if self.pulse1_enable && self.pulse1_env.output > 1 && !self.pulse1_sweep.mute {
-            self.pulse1_visual = self.pulse1_sequence.reload;
-        } else {
-            self.pulse1_visual = 2047; 
-        }
-
-        
-        if self.pulse2_enable && self.pulse2_env.output > 1 && !self.pulse2_sweep.mute {
-            self.pulse2_visual = self.pulse2_sequence.reload;
-        } else {
-            self.pulse2_visual = 2047; 
-        }
-
-        if self.noise_enable && self.noise_env.output > 1 {
-            self.noise_visual = self.noise_sequence.reload;
-        } else {
-            self.noise_visual = 2047; 
-        }
-
-        self.clock_counter        = self.clock_counter.wrapping_add(1);
+        self.clock_counter = self.clock_counter.wrapping_add(1);
     }
 
     
