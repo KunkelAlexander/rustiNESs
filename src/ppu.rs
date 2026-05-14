@@ -395,7 +395,6 @@ impl<C: CartridgeInterface> Olc2c02<C> {
     }
 
     
-    #[inline(never)]
     fn fetch_background_tile(&mut self, cartridge: &mut C) {
         self.update_shifters();
 
@@ -440,7 +439,6 @@ impl<C: CartridgeInterface> Olc2c02<C> {
         }
     }
 
-    #[inline(never)]
     fn evaluate_sprites(&mut self) {
         // Clear sprite scanline array
         self.sprite_scanline = SpriteScanline::default();
@@ -481,7 +479,6 @@ impl<C: CartridgeInterface> Olc2c02<C> {
         }
     }
 
-    #[inline(never)]
     fn load_sprite_patterns(&mut self, cartridge: &mut C) {
         for i in 0u8..self.sprite_count {
 
@@ -588,7 +585,6 @@ impl<C: CartridgeInterface> Olc2c02<C> {
         } // End of the loop over the active sprites
     }
 
-    #[inline(never)]
     fn compose_pixel(&mut self, cartridge: &mut C) {
 
         // Background
