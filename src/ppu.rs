@@ -973,8 +973,15 @@ impl<C: CartridgeInterface> Olc2c02<C> {
     
 	// This is a convenience function that takes a specified palette and pixel
 	// index and returns the appropriate screen colour.
-    fn get_colour_from_palette_ram(&self, palette: u8, pixel: u8, cartridge: &C) -> Option<u8> {
-        let addr = 0x3F00u16 + ((palette as u16) << 2) + pixel as u16;
-        self.read_ppu(addr, cartridge)
+    // Originally, javidx9 used read_ppu here but since this is a hot path in the code
+    // I decided to move the logic into the function itself
+    fn get_colour_from_palette_ram(&self, palette: u8, pixel: u8, _cartridge: &C) -> Option<u8> {
+        let mut addr = ((palette as usize) << 2) | (pixel as usize & 0x03);
+        addr &= 0x1F;
+        if addr == 0x10 { addr = 0x00; }
+        if addr == 0x14 { addr = 0x04; }
+        if addr == 0x18 { addr = 0x08; }
+        if addr == 0x1C { addr = 0x0C; }
+        Some(self.table_palette[addr])
     }
 }
