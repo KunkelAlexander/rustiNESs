@@ -332,7 +332,7 @@ pub struct Olc2A03 {
     noise_visual:        u16,
 
     wavetable:           WaveTable,
-    clock_counter:       u32,
+    clock_divider:       u8,
     frame_clock_counter: u32,
     global_time:         f64,
 }
@@ -375,8 +375,8 @@ impl Olc2A03 {
             noise_visual:        0,
 
             wavetable:           WaveTable::new(32),
-            clock_counter:       0, 
-            frame_clock_counter: 0, 
+            clock_divider:       0,
+            frame_clock_counter: 0,
             global_time:         0.0
 
         }
@@ -386,10 +386,11 @@ impl Olc2A03 {
         let mut is_quarter_frame_clock = false; 
         let mut is_half_frame_clock    = false; 
 
-        const TIME_STEP: f64 = 1.0 / (1789773.0 * 3.0);
-        self.global_time += TIME_STEP;
-
-        if self.clock_counter % 6 == 0 {
+        // Run every 6 steps
+        if self.clock_divider == 0 {
+            self.clock_divider = 5;
+            const TIME_STEP: f64 = 1.0 / (1789773.0 * 3.0);
+            self.global_time += TIME_STEP;
             self.frame_clock_counter = self.frame_clock_counter.wrapping_add(1);
 
             // 4-step sequence mode
@@ -494,9 +495,9 @@ impl Olc2A03 {
             } else {
                 self.noise_visual = 2047;
             }
+        } else {
+            self.clock_divider -= 1;
         }
-
-        self.clock_counter = self.clock_counter.wrapping_add(1);
     }
 
     
@@ -507,7 +508,7 @@ impl Olc2A03 {
         self.pulse1_sample       = 0.0;
         self.pulse1_sequence     = Sequencer::new(SequencerKind::Pulse);
         self.pulse1_osc          = OscillatorPulse::new();
-        self.clock_counter       = 0;
+        self.clock_divider       = 0;
         self.frame_clock_counter = 0;
         self.global_time         = 0.0;
     }
