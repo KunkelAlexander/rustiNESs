@@ -20,6 +20,8 @@ const audioBufferPool = [];                 // ArrayBuffer[]
 let wasmMemory = null; 
 let frameView  = null;
 
+let debugOverlay  = false;
+
 // Lightweight FPS counter for fullscreen overlay
 let fps_lastTime  = 0;
 let fps_frames    = 0;
@@ -461,24 +463,26 @@ function frame(timestamp) {
         fps_lastTime = fps_now;
       }
 
-      // Draw FPS overlay directly on the fullscreen canvas (after putImageData)
-      fsCtx.font         = "bold 10px monospace";
-      fsCtx.textBaseline = "top";
-      fsCtx.fillStyle    = "rgba(0,0,0,0.55)";
-      fsCtx.fillRect(2, 2, 38, 14);
-      fsCtx.fillStyle    = "#ffffff";
-      fsCtx.fillText(`${fps_display} FPS`, 5, 4);
+      if (debugOverlay) {
+        // Draw FPS overlay directly on the fullscreen canvas (after putImageData)
+        fsCtx.font         = "bold 10px monospace";
+        fsCtx.textBaseline = "top";
+        fsCtx.fillStyle    = "rgba(0,0,0,0.55)";
+        fsCtx.fillRect(2, 2, 38, 14);
+        fsCtx.fillStyle    = "#ffffff";
+        fsCtx.fillText(`${fps_display} FPS`, 5, 4);
 
-      // Performance breakdown — bottom-right corner, all white
-      const boxW = 99, boxH = 46;
-      const boxX = 256 - boxW - 2, boxY = 240 - boxH - 2;
-      fsCtx.fillStyle = "rgba(0,0,0,0.55)";
-      fsCtx.fillRect(boxX, boxY, boxW, boxH);
-      fsCtx.fillStyle = "#ffffff";
-      const tx = boxX + 4;
-      fsCtx.fillText(`wasm:   ${perf_wasm.toFixed(1)} ms`,   tx, boxY + 4);
-      fsCtx.fillText(`render: ${perf_render.toFixed(1)} ms`, tx, boxY + 17);
-      fsCtx.fillText(`gap:    ${perf_gap.toFixed(1)} ms`,    tx, boxY + 30);
+        // Performance breakdown — bottom-right corner, all white
+        const boxW = 99, boxH = 46;
+        const boxX = 256 - boxW - 2, boxY = 240 - boxH - 2;
+        fsCtx.fillStyle = "rgba(0,0,0,0.55)";
+        fsCtx.fillRect(boxX, boxY, boxW, boxH);
+        fsCtx.fillStyle = "#ffffff";
+        const tx = boxX + 4;
+        fsCtx.fillText(`wasm:   ${perf_wasm.toFixed(1)} ms`,   tx, boxY + 4);
+        fsCtx.fillText(`render: ${perf_render.toFixed(1)} ms`, tx, boxY + 17);
+        fsCtx.fillText(`gap:    ${perf_gap.toFixed(1)} ms`,    tx, boxY + 30);
+      }
     }
   } catch (e) {
     running = false;
@@ -660,6 +664,9 @@ window.addEventListener("keydown", (e) => {
     exitFullscreen();
     return;
   }
+
+  if (e.code === "KeyQ" && mode === "fullscreen") { e.preventDefault(); saveState(); return; }
+  if (e.code === "KeyE" && mode === "fullscreen") { e.preventDefault(); loadState(); return; }
 
   const btn = keyToButton(e.code);
   if (!btn) return;
