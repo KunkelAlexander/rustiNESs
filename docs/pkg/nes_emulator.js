@@ -116,6 +116,17 @@ export class NES {
             throw takeFromExternrefTable0(ret[0]);
         }
     }
+    /**
+     * @param {Uint8Array} data
+     */
+    load_state_json(data) {
+        const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.nes_load_state_json(this.__wbg_ptr, ptr0, len0);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
     constructor() {
         const ret = wasm.nes_new();
         this.__wbg_ptr = ret >>> 0;
@@ -133,6 +144,15 @@ export class NES {
      */
     save_state() {
         const ret = wasm.nes_save_state(this.__wbg_ptr);
+        var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v1;
+    }
+    /**
+     * @returns {Uint8Array}
+     */
+    save_state_json() {
+        const ret = wasm.nes_save_state_json(this.__wbg_ptr);
         var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
         wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
         return v1;

@@ -747,6 +747,8 @@ function bindUI() {
   $("fsExitBtn")         .addEventListener("click", exitFullscreen);
   $("fsSaveBtn")         .addEventListener("click", saveState);
   $("fsLoadBtn")         .addEventListener("click", loadState);
+  $("fsDownloadBtn")     .addEventListener("click", downloadState);
+  $("fsUploadBtn")       .addEventListener("click", uploadState);
 
   // Debug controls
   $("btnReset").addEventListener("click", () => {
@@ -1041,6 +1043,43 @@ function loadState() {
   } catch (e) {
     log(`Load failed: ${e}`);
   }
+}
+
+function downloadState() {
+  if (!emu) return;
+  const bytes = emu.save_state_json();
+  const blob = new Blob([bytes], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "nes_state.json";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 100);
+  log("State downloaded");
+}
+
+function uploadState() {
+  if (!emu) return;
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ".json,application/json";
+  input.onchange = async () => {
+    const file = input.files[0];
+    if (!file) return;
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    try {
+      emu.load_state_json(bytes);
+      frameView = null;
+      if (nesNode) nesNode.port.postMessage({ type: "reset" });
+      audioBufferLevel = 0;
+      log("State uploaded");
+    } catch (e) {
+      log(`Upload failed: ${e}`);
+    }
+  };
+  input.click();
 }
 
 // ═══════════════════════════════════════════════════════

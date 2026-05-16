@@ -96,4 +96,12 @@ impl NES {
     pub fn load_state(&mut self, data: &[u8]) -> Result<(), String> {
         self.inner.load_state_binary(data)
     }
+
+    pub fn save_state_json(&self) -> Vec<u8> {
+        self.inner.save_state_json()
+    }
+
+    pub fn load_state_json(&mut self, data: &[u8]) -> Result<(), String> {
+        self.inner.load_state_json(data)
+    }
 }

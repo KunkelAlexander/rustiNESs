@@ -125,7 +125,11 @@ A9 42
         <h2>NES Console</h2>
         <div class="rom-zone">
           <input type="file" id="romLoader" accept=".nes" hidden />
-          <button id="btnLoadROM" class="primary">Load ROM</button>
+          <div class="rom-btns">
+            <button id="btnLoadROM" class="primary">Load ROM</button>
+            <button id="fsDownloadBtn">⬇ Download state</button>
+            <button id="fsUploadBtn">⬆ Upload state</button>
+          </div>
           <canvas id="screen" width="256" height="240" tabindex="0" aria-label="NES output (debug)"></canvas>
           <div class="power-led"></div>
         </div>

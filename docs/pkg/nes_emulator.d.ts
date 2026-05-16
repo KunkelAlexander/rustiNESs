@@ -17,10 +17,12 @@ export class NES {
     insert_cartridge(cartridge_data: Uint8Array): void;
     load_program(bytes: Uint8Array, offset: number): void;
     load_state(data: Uint8Array): void;
+    load_state_json(data: Uint8Array): void;
     constructor();
     reset(): void;
     run_frame(): void;
     save_state(): Uint8Array;
+    save_state_json(): Uint8Array;
     set_controller(i: number, x: boolean, z: boolean, a: boolean, s: boolean, up: boolean, down: boolean, left: boolean, right: boolean): void;
     step_instruction(): void;
 }
@@ -43,10 +45,12 @@ export interface InitOutput {
     readonly nes_insert_cartridge: (a: number, b: number, c: number) => [number, number];
     readonly nes_load_program: (a: number, b: number, c: number, d: number) => void;
     readonly nes_load_state: (a: number, b: number, c: number) => [number, number];
+    readonly nes_load_state_json: (a: number, b: number, c: number) => [number, number];
     readonly nes_new: () => number;
     readonly nes_reset: (a: number) => void;
     readonly nes_run_frame: (a: number) => void;
     readonly nes_save_state: (a: number) => [number, number];
+    readonly nes_save_state_json: (a: number) => [number, number];
     readonly nes_set_controller: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => void;
     readonly nes_step_instruction: (a: number) => void;
     readonly __wbindgen_externrefs: WebAssembly.Table;
