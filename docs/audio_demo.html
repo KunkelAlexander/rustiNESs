@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NES emulator audio timing demo</title>
+  <style>
+    :root { font-family: system-ui, sans-serif; color-scheme: light dark; }
+    body { max-width: 880px; margin: 32px auto; padding: 0 18px 48px; line-height: 1.45; }
+    h1 { margin-bottom: .25rem; }
+    .subtle { opacity: .75; }
+    .panel { border: 1px solid color-mix(in srgb, CanvasText 20%, transparent); border-radius: 14px; padding: 16px; margin: 16px 0; }
+    .row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 12px 0; }
+    button, select, input { font: inherit; }
+    button { padding: .6rem .9rem; border-radius: 10px; border: 1px solid color-mix(in srgb, CanvasText 25%, transparent); cursor: pointer; }
+    label { display: inline-flex; gap: 8px; align-items: center; }
+    input[type=range] { width: 210px; }
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-top: 12px; }
+    .stat { border: 1px solid color-mix(in srgb, CanvasText 14%, transparent); border-radius: 12px; padding: 10px; }
+    .stat b { display: block; font-size: 1.35rem; margin-top: 4px; }
+    .note { min-height: 4em; }
+  </style>
+</head>
+<body>
+  <h1>NES emulator audio timing demo</h1>
+  <p class="subtle">
+    A small testbed for comparing browser audio scheduling strategies. Instead of an APU it generates a
+    real-time sine wave; the same timing problems apply to any sample source.
+  </p>
+
+  <div class="panel">
+    <div class="row">
+      <button id="startBtn">Start audio</button>
+      <button id="stopBtn" disabled>Stop</button>
+      <label>Approach
+        <select id="mode">
+          <option value="a1" selected>1: RAF pushes one frame of samples</option>
+          <option value="a2">2: RAF regulates ring buffer level</option>
+          <option value="a3">3: Worklet reports level, main thread fills when low</option>
+          <option value="a4">4: Audio-demand driven generation</option>
+          <option value="a5">5: Approach 4, but emulation runs in a Worker</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="row">
+      <label>Frequency <input id="freq" type="range" min="80" max="1200" value="440" /> <span id="freqOut">440</span> Hz</label>
+      <label>Volume <input id="gain" type="range" min="0" max="0.25" step="0.005" value="0.08" /> <span id="gainOut">0.080</span></label>
+    </div>
+
+    <div class="row">
+      <label>Simulated cost <input id="cost" type="range" min="0" max="24" step="0.5" value="4" /> <span id="costOut">4.0</span> ms/frame</label>
+      <label>Target buffer <input id="targetMs" type="range" min="20" max="250" value="90" /> <span id="targetOut">90</span> ms</label>
+    </div>
+
+    <p id="modeNote" class="note"></p>
+
+    <div class="stats">
+      <div class="stat">Sample rate <b id="sampleRate">-</b></div>
+      <div class="stat">Buffer level <b id="bufferLevel">-</b></div>
+      <div class="stat">Underruns <b id="underruns">0</b></div>
+      <div class="stat">Overruns <b id="overruns">0</b></div>
+      <div class="stat">Frames emulated <b id="frames">0</b></div>
+      <div class="stat">Skipped frames <b id="skipped">0</b></div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  "use strict";
+
+  const NES_FPS = 60;
+  const TWO_PI = Math.PI * 2;
+  const $ = id => document.getElementById(id);
+
+  const els = Object.fromEntries(
+    ["startBtn","stopBtn","mode","freq","freqOut","gain","gainOut","cost","costOut",
+     "targetMs","targetOut","modeNote","sampleRate","bufferLevel","underruns",
+     "overruns","frames","skipped"].map(k => [k, $(k)])
+  );
+
+  const notes = {
+    a1: "<b>1:</b> requestAnimationFrame pushes sampleRate/60 samples per video frame. If the main thread stalls, the audio thread drains the ring buffer and crackles.",
+    a2: "<b>2:</b> the video loop watches the reported buffer level and runs extra frames when low or skips when high.",
+    a3: "<b>3:</b> the worklet periodically reports its level; the main thread pushes a chunk whenever it falls below the low-water mark. It is still main-thread-driven generation, not truly audio-thread synchronous.",
+    a4: "<b>4:</b> the worklet asks for the exact number of samples it needs. A native emulator could satisfy this synchronously; here the message hop is async, so we keep a small safety target.",
+    a5: "<b>5:</b> same as 4, but emulation runs in a Worker. The main thread stays responsive and the Worker can spend its full budget on samples without blocking the audio refill path. This is how real emulators avoid stutter at high per-frame cost. In this browser demo, this this is still not like native code"
+  };
+
+  const workletCode = `
+    class Ring {
+      constructor(cap) { this.b = new Float32Array(cap); this.cap = cap; this.r = 0; this.w = 0; this.n = 0; }
+      push(s) {
+        let i = 0;
+        for (; i < s.length && this.n < this.cap; i++) {
+          this.b[this.w] = s[i]; this.w = (this.w + 1) % this.cap; this.n++;
+        }
+        return i;
+      }
+      pop() {
+        if (this.n <= 0) return null;
+        const v = this.b[this.r]; this.r = (this.r + 1) % this.cap; this.n--; return v;
+      }
+    }
+
+    class Proc extends AudioWorkletProcessor {
+      constructor() {
+        super();
+        this.ring = new Ring(Math.floor(sampleRate * 0.5));
+        this.under = 0; this.over = 0; this.tick = 0;
+        this.mode = "a4"; this.target = Math.floor(sampleRate * 0.09);
+        this.port.onmessage = e => {
+          const m = e.data;
+          if (m.type === "samples") {
+            const pushed = this.ring.push(m.samples);
+            if (pushed < m.samples.length) this.over += m.samples.length - pushed;
+          } else if (m.type === "config") {
+            this.mode = m.mode; this.target = m.target;
+          } else if (m.type === "reset") {
+            this.ring = new Ring(Math.floor(sampleRate * 0.5));
+            this.under = 0; this.over = 0;
+          }
+        };
+      }
+      process(_, outputs) {
+        const out = outputs[0][0];
+        for (let i = 0; i < out.length; i++) {
+          const v = this.ring.pop();
+          if (v === null) { out[i] = 0; this.under++; } else out[i] = v;
+        }
+        // Report ~85 Hz (every 4 quanta at 44.1 kHz). Modes 3, 4, and 5 react to this.
+        if ((++this.tick & 3) === 0) {
+          this.port.postMessage({
+            level: this.ring.n, capacity: this.ring.cap,
+            under: this.under, over: this.over,
+            need: Math.max(0, this.target - this.ring.n)
+          });
+        }
+        return true;
+      }
+    }
+    registerProcessor("proc", Proc);
+  `;
+
+  const workerCode = `
+    let phase = 0;
+    const TWO_PI = Math.PI * 2;
+    const busyWait = ms => { const t = performance.now(); while (performance.now() - t < ms); };
+
+    self.onmessage = e => {
+      const m = e.data;
+      if (m.type === "reset") { phase = 0; return; }
+      if (m.type !== "need") return;
+
+      const { count, freq, gain, sampleRate, costMs, samplesPerFrame } = m;
+      busyWait(costMs * (count / samplesPerFrame));
+      const samples = new Float32Array(count);
+      const step = TWO_PI * freq / sampleRate;
+      for (let i = 0; i < count; i++) {
+        samples[i] = Math.sin(phase) * gain;
+        phase += step;
+        if (phase >= TWO_PI) phase -= TWO_PI;
+      }
+      self.postMessage(
+        { samples, framesEmulated: count / samplesPerFrame },
+        [samples.buffer]
+      );
+    };
+  `;
+
+  let ctx = null, node = null, worker = null, rafId = 0, statsTimer = 0, running = false;
+  let sampleRate = 44100, samplesPerFrame = 735, phase = 0;
+  let framesEmulated = 0, skippedFrames = 0;
+  let last = { level: 0, capacity: 1, under: 0, over: 0, need: 0 };
+
+  const busyWait = ms => { const t = performance.now(); while (performance.now() - t < ms); };
+
+  function genSamples(n) {
+    const freq = +els.freq.value, gain = +els.gain.value;
+    const out = new Float32Array(n), step = TWO_PI * freq / sampleRate;
+    for (let i = 0; i < n; i++) {
+      out[i] = Math.sin(phase) * gain;
+      phase += step;
+      if (phase >= TWO_PI) phase -= TWO_PI;
+    }
+    return out;
+  }
+
+  function emulateFrame() {
+    busyWait(+els.cost.value);
+    framesEmulated++;
+    return genSamples(samplesPerFrame);
+  }
+
+  function push(samples) {
+    if (!node || !running) return;
+    node.port.postMessage({ type: "samples", samples }, [samples.buffer]);
+  }
+
+  const targetSamples = () => Math.floor(sampleRate * +els.targetMs.value / 1000);
+
+  function sendConfig() {
+    node?.port.postMessage({ type: "config", mode: els.mode.value, target: targetSamples() });
+  }
+
+  function frameLoop() {
+    if (!running) return;
+    const mode = els.mode.value;
+
+    if (mode === "a1") {
+      push(emulateFrame());
+    } else if (mode === "a2") {
+      const target = targetSamples();
+      const low = target * 0.65, high = target * 1.45;
+      if (last.level > high) {
+        skippedFrames++;
+      } else {
+        let frames = 1;
+        if (last.level < low) {
+          frames = Math.max(1, Math.min(4, Math.ceil((target - last.level) / samplesPerFrame)));
+        }
+        for (let i = 0; i < frames; i++) push(emulateFrame());
+      }
+    }
+    // a3 and a4 react inside handleMessage instead.
+
+    rafId = requestAnimationFrame(frameLoop);
+  }
+
+  function handleMessage(e) {
+    last = e.data;
+    const mode = els.mode.value;
+
+    if (mode === "a3" && last.level < targetSamples() * 0.65) {
+      push(emulateFrame());
+      push(emulateFrame());
+    } else if (mode === "a4" && last.need > 0) {
+      busyWait(+els.cost.value * (last.need / samplesPerFrame));
+      framesEmulated += last.need / samplesPerFrame;
+      push(genSamples(last.need));
+    } else if (mode === "a5" && last.need > 0) {
+      worker?.postMessage({
+        type: "need",
+        count: last.need,
+        freq: +els.freq.value,
+        gain: +els.gain.value,
+        sampleRate,
+        costMs: +els.cost.value,
+        samplesPerFrame
+      });
+    }
+  }
+
+  async function start() {
+    if (running) return;
+    ctx = new AudioContext();
+    sampleRate = ctx.sampleRate;
+    samplesPerFrame = Math.round(sampleRate / NES_FPS);
+
+    const url = URL.createObjectURL(new Blob([workletCode], { type: "application/javascript" }));
+    await ctx.audioWorklet.addModule(url);
+    URL.revokeObjectURL(url);
+
+    node = new AudioWorkletNode(ctx, "proc");
+    node.port.onmessage = handleMessage;
+    node.connect(ctx.destination);
+
+    const workerUrl = URL.createObjectURL(new Blob([workerCode], { type: "application/javascript" }));
+    worker = new Worker(workerUrl);
+    URL.revokeObjectURL(workerUrl);
+    worker.onmessage = e => {
+      framesEmulated += e.data.framesEmulated;
+      push(e.data.samples);
+    };
+
+    running = true;
+    els.startBtn.disabled = true;
+    els.stopBtn.disabled = false;
+
+    sendConfig();
+    phase = framesEmulated = skippedFrames = 0;
+
+    // Pre-roll so startup isn't clicky (approach 1 skips this to expose its weakness).
+    if (els.mode.value !== "a1") push(genSamples(targetSamples()));
+
+    rafId = requestAnimationFrame(frameLoop);
+    statsTimer = setInterval(updateStats, 100);
+  }
+
+  async function stop() {
+    running = false;
+    cancelAnimationFrame(rafId);
+    clearInterval(statsTimer);
+    node?.disconnect();
+    if (node) node.port.onmessage = null;
+    node = null;
+    worker?.terminate();
+    worker = null;
+    await ctx?.close();
+    ctx = null;
+    els.startBtn.disabled = false;
+    els.stopBtn.disabled = true;
+  }
+
+  function updateLabels() {
+    els.freqOut.textContent = els.freq.value;
+    els.gainOut.textContent = (+els.gain.value).toFixed(3);
+    els.costOut.textContent = (+els.cost.value).toFixed(1);
+    els.targetOut.textContent = els.targetMs.value;
+    els.modeNote.innerHTML = notes[els.mode.value];
+    sendConfig();
+  }
+
+  function updateStats() {
+    els.sampleRate.textContent = sampleRate + " Hz";
+    els.bufferLevel.textContent = `${last.level} / ${last.capacity}`;
+    els.underruns.textContent = last.under;
+    els.overruns.textContent = last.over;
+    els.frames.textContent = Math.floor(framesEmulated);
+    els.skipped.textContent = skippedFrames;
+  }
+
+  els.startBtn.addEventListener("click", start);
+  els.stopBtn.addEventListener("click", stop);
+  for (const el of [els.mode, els.freq, els.gain, els.cost, els.targetMs]) {
+    el.addEventListener("input", updateLabels);
+  }
+  els.mode.addEventListener("change", () => {
+    if (running) {
+      node?.port.postMessage({ type: "reset" });
+      worker?.postMessage({ type: "reset" });
+      phase = framesEmulated = skippedFrames = 0;
+    }
+    updateLabels();
+  });
+
+  updateLabels();
+  updateStats();
+})();
+</script>
+</body>
+</html>
