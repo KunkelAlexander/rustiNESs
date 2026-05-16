@@ -14,6 +14,10 @@ const SYSTEM_CLOCK_RATE: u32 = 5_369_319;
 const AUDIO_SAMPLE_RATE: u32 = 44_100;
 const AUDIO_BUFFER_SIZE: usize = 1024; // enough for one frame (~735 samples)
 
+fn default_audio_buffer() -> Vec<f32> {
+    vec![0.0f32; AUDIO_BUFFER_SIZE]
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct Nes {
     cpu: Olc6502<Bus<Cartridge>>,
@@ -21,7 +25,7 @@ pub struct Nes {
     system_clock_counter: u32,
     cpu_divider: u8,
     audio_acc: u32,
-    #[serde(skip)]
+    #[serde(skip, default = "default_audio_buffer")]
     audio_buffer: Vec<f32>,
     #[serde(skip)]
     audio_buffer_len: usize,

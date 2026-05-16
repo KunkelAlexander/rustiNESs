@@ -14,8 +14,8 @@ It currently emulates the 6502 CPU, the PPU, the APU, controller input, DMA, and
 
 This Rust project was written by hand as a learning exercise. I mainly used LLMs for explanations, discussion, and a few repetitive tasks, while keeping the emulator implementation in Rust itself manual. The JS/HTML GUI was written using Claude. 
 The following tools were also written by Claude: 
-**Benchmarking:** [RustiNESs Benchmarking](https://kunkelalexander.github.io/rustiNESs/benchmark.html)
-**Struggles with audio:** [Real-time web audio demo](https://kunkelalexander.github.io/rustiNESs/audio_demo.html)
+- **Benchmarking:** [RustiNESs Benchmarking](https://kunkelalexander.github.io/rustiNESs/benchmark.html)
+- **Struggles with audio:** [Real-time web audio demo](https://kunkelalexander.github.io/rustiNESs/audio_demo.html)
 
 ## Features
 

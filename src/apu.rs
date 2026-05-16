@@ -306,6 +306,10 @@ impl Sweeper {
     }
 }
 
+fn default_wavetable() -> WaveTable {
+    WaveTable::new(32)
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct Olc2A03 {
     // Pulse 1 
@@ -341,7 +345,7 @@ pub struct Olc2A03 {
     noise_lc:            LengthCounter,
     noise_visual:        u16,
 
-    #[serde(skip)]
+    #[serde(skip, default = "default_wavetable")]
     wavetable:           WaveTable,
     clock_divider:       u8,
     frame_clock_counter: u32,

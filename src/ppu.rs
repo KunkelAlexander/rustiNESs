@@ -94,14 +94,18 @@ impl<const N: usize> SpriteArray<N> {
 pub type OAM = SpriteArray<64>;
 pub type SpriteScanline = SpriteArray<8>; 
 
+fn default_screen() -> Vec<u8> {
+    vec![0u8; SCREEN_H * SCREEN_W]
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(bound = "")]
 pub struct Olc2c02<C: CartridgeInterface> {
-    #[serde(skip)]
-    screen:                Vec<u8>,   // Frame buffer
-    table_name:            Vec<u8>,                   // 2 KB of physical VRAM for the name tables
-    table_palette:         [u8; 32],                  // 32 Bytes physical VRAM for the palletes
-    table_pattern:         Vec<u8>,                   // 8 KB of physical VRAM for the patterns
+    #[serde(skip, default = "default_screen")]
+    screen:                Vec<u8>,  // Frame buffer
+    table_name:            Vec<u8>,  // 2 KB of physical VRAM for the name tables
+    table_palette:         [u8; 32], // 32 Bytes physical VRAM for the palletes
+    table_pattern:         Vec<u8>,  // 8 KB of physical VRAM for the patterns
     scanline:               u16, 
     cycle:                  u16, 
     pub frame_complete:     bool,

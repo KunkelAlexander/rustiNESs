@@ -2,10 +2,9 @@
 
 A Nintendo Entertainment System (NES) emulator written in Rust, built for learning, experimentation, and clean architecture.
 
-It currently emulates the 6502 CPU, the PPU, the APU, controller input, DMA, and Mapper 000, and can already run games like **Donkey Kong** and **Super Mario Bros.**
+It currently emulates the 6502 CPU, the PPU, the APU, controller input, DMA, and Mapper 000, and can already run games like **Donkey Kong** and **Super Mario Bros.** It is based on [javidx9's NES Emulator series](https://www.youtube.com/playlist?list=PLrOv9FMX8xJHqMvSGB_9G9nZZ_4IgteYf).
 
-**Play it in the browser:** [RustiNESs Web](https://kunkelalexander.github.io/rustiNESs/)  
-**Based on:** [javidx9's NES Emulator series](https://www.youtube.com/playlist?list=PLrOv9FMX8xJHqMvSGB_9G9nZZ_4IgteYf)
+**Play it in the browser:** [RustiNESs Web](https://kunkelalexander.github.io/rustiNESs/) 
 
 <p align="center">
   <img src="figures/0.png" alt="Demo">
@@ -14,7 +13,9 @@ It currently emulates the 6502 CPU, the PPU, the APU, controller input, DMA, and
 ## Learning Approach
 
 This Rust project was written by hand as a learning exercise. I mainly used LLMs for explanations, discussion, and a few repetitive tasks, while keeping the emulator implementation in Rust itself manual. The JS/HTML GUI was written using Claude. 
-
+The following tools were also written by Claude: 
+- **Benchmarking:** [RustiNESs Benchmarking](https://kunkelalexander.github.io/rustiNESs/benchmark.html)
+- **Struggles with audio:** [Real-time web audio demo](https://kunkelalexander.github.io/rustiNESs/audio_demo.html)
 
 ## Features
 
@@ -61,7 +62,7 @@ This Rust project was written by hand as a learning exercise. I mainly used LLMs
     - 8% is spent in the loop adding the harmonics
 - After some research, I decided that wavetables are the way to go - We precompute the waveforms at a given temporal resolution for different duty cycles
     - This requires more RAM (4096 * 4 * 4 bytes for f32 = 64 KB) but makes the wave sampling a simple array 
-- With the wavetable, performance is below 5 ms per frame again - I checked this in my browse using the following website Claude kindly provided ([benchmark.html](https://kunkelalexander.github.io/rustiNESs/benchmark.html))
+- With the wavetable, performance is below 5 ms per frame again - I checked this in my browse using [this tool] (https://kunkelalexander.github.io/rustiNESs/benchmark.html) Claude kindly provided
 
 
 ![](figures/35.png)
@@ -109,12 +110,15 @@ This Rust project was written by hand as a learning exercise. I mainly used LLMs
         - If buffer level is low, we run 2 frames of emulations and push 2x samples, 
         - If buffer level is high, we skip the emulation and push nothing 
 
-    - **Approch 4 - the gold standard and Javidx9's approach**:
+    - **Approach 4 - the gold standard and Javidx9's approach**:
         - Audio worklet fires every 1/44100 = 2.9s
         - Asks: How many samples do I need
         - The emulation runs long enough to produce those samples. This works because NES emulation is fast
         - Whatever the PPU last rendered is drawn to the screen 
         - This is called synchronising to sound
+
+- Claude kindly provided [this tool](https://kunkelalexander.github.io/rustiNESs/audio_demo.html) which lets you explore the different approaches to some extent. Approach 4 is most closely reflected by approaches 4/5 in the tool. However, we are still stuck to an asynchronous architecture in the browser. A `SharedArrayBuffer` would make these approaches more similar to a native approach, but this requires cross-origin isolation with GitHub Pages disables by default. Enabling it would require an external script and a page reload which I do not want. So, I prefer living with imperfect audio for now. 
+
 - Actually, I realised that the performance of the emulation itself is still a bottleneck. If frame generation takes too long, audio is necessarily going to lag behind
     - Debug: 28ms per frame
     - Release: 4ms per frame 
