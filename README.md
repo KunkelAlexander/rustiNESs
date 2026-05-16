@@ -30,7 +30,7 @@ This Rust project was written by hand as a learning exercise. I mainly used LLMs
 ## Devlog
 
 ### Day 16: 16.05.2025
-- Add emulator serialisation for quicksave! 
+- Add emulator serialisation for quicksave! This is really easy. We derive from `serde` for all classes that need serialisation and only need to worry about the class members that should not go into the binary file because they would bloat it. I decided to opt for a binary serialisation here, but `serde_json` would be a nice choice too for editing the save file in a text editor (cheats & debugging). Maybe I will add both serialisation options! 
 
 ### Day 15: 09.05.2025
 - Noise now works to the point where SMB sounds nice !
@@ -92,7 +92,7 @@ This Rust project was written by hand as a learning exercise. I mainly used LLMs
         - Audio worklet drains ring buffer independently
         - *Result*: If the emulation takes too long, I get terrible-sounding buffer underruns. Even for 6ms per emulation frame, I get some crackling. Audio is really a different beast. 
         
-    - **Approach 1.1**: 
+    - **Approach 2**: 
         - Frame loop fires every 1/60 = 16.7ms 
         - We check the current state of the ring buffer 
             - If there are too many samples, we skip a frame
@@ -101,13 +101,14 @@ This Rust project was written by hand as a learning exercise. I mainly used LLMs
         - Audio worklet drains ring buffer independently
         - *Result*: In general, this tends to work okay but is also not very robust. Sometimes, there are too many samples on the buffer when the audio system fails to empty it at start-up and the first seconds of the run are spent skipping frames to empty the buffer. 
 
-    - **Approach 2**: 
+    - **Approach 3**: 
         - Audio worklet fires every 1/44100 = 2.9ms
         - Reports buffer level back to main thread
         - Main thread checks buffer level
         - If buffer level is low, we run 2 frames of emulations and push 2x samples, 
         - If buffer level is high, we skip the emulation and push nothing 
-    - **Approch 3 - the gold standard and Javidx9's approach**:
+        
+    - **Approch 4 - the gold standard and Javidx9's approach**:
         - Audio worklet fires every 1/44100 = 2.9s
         - Asks: How many samples do I need
         - The emulation runs long enough to produce those samples. This works because NES emulation is fast

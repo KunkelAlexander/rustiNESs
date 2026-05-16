@@ -142,8 +142,6 @@ $("btnRun").addEventListener("click", async () => {
   // ─── Warmup ─────────────────────────────────────────
   log(`Warming up (${warmup} frames)…`);
   for (let i = 0; i < warmup; i++) emu.run_frame();
-  // Yield to browser briefly so warmup doesn't bleed into measurement
-  await new Promise(r => setTimeout(r, 50));
 
   // ─── Bulk timing ────────────────────────────────────
   log("Running bulk benchmark…");

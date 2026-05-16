@@ -21,7 +21,7 @@
           <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
             <path d="M1 1h4M1 1v4M14 1h-4M14 1v4M1 14h4M1 14v-4M14 14h-4M14 14v-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
           </svg>
-          Fullscreen
+          Play with fullscreen
         </button>
       </nav>
 
@@ -78,6 +78,12 @@
 
         <!-- Exit button — fixed corner overlay -->
         <button class="fs-exit-btn" id="fsExitBtn" aria-label="Exit fullscreen">✕ Exit</button>
+
+        <!-- Save / Load state — below Exit -->
+        <div class="fs-save-btns">
+          <button id="fsSaveBtn" aria-label="Save state">💾 Save</button>
+          <button id="fsLoadBtn" aria-label="Load state">📂 Load</button>
+        </div>
 
         <!-- Desktop keyboard bindings overlay -->
         <div class="fs-kb-guide" id="fsKbGuide" aria-label="Keyboard bindings">

@@ -745,6 +745,8 @@ function bindUI() {
   // Fullscreen button (separate from mode switch)
   $("btnEnterFullscreen").addEventListener("click", enterFullscreen);
   $("fsExitBtn")         .addEventListener("click", exitFullscreen);
+  $("fsSaveBtn")         .addEventListener("click", saveState);
+  $("fsLoadBtn")         .addEventListener("click", loadState);
 
   // Debug controls
   $("btnReset").addEventListener("click", () => {
@@ -1002,6 +1004,43 @@ function initJoystick() {
   // Re-draw when overlay becomes visible (canvas may have been zero-sized before)
   new ResizeObserver(() => resizeJoystick()).observe(canvas);
   resizeJoystick();
+}
+
+// ═══════════════════════════════════════════════════════
+//  Save / Load state
+// ═══════════════════════════════════════════════════════
+
+const SAVE_KEY = "nes_save_state";
+
+function saveState() {
+  if (!emu) return;
+  const bytes = emu.save_state();
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  try {
+    localStorage.setItem(SAVE_KEY, btoa(binary));
+    log("State saved");
+  } catch (e) {
+    log(`Save failed: ${e.message}`);
+  }
+}
+
+function loadState() {
+  if (!emu) return;
+  const b64 = localStorage.getItem(SAVE_KEY);
+  if (!b64) { log("No save state found"); return; }
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  try {
+    emu.load_state(bytes);
+    frameView = null; // screen Vec reallocated on load — old pointer is stale
+    if (nesNode) nesNode.port.postMessage({ type: "reset" });
+    audioBufferLevel = 0;
+    log("State loaded");
+  } catch (e) {
+    log(`Load failed: ${e}`);
+  }
 }
 
 // ═══════════════════════════════════════════════════════
