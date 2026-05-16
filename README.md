@@ -6,6 +6,8 @@ It currently emulates the 6502 CPU, the PPU, the APU, controller input, DMA, and
 
 **Play it in the browser:** [RustiNESs Web](https://kunkelalexander.github.io/rustiNESs/)  
 **Based on:** [javidx9's NES Emulator series](https://www.youtube.com/playlist?list=PLrOv9FMX8xJHqMvSGB_9G9nZZ_4IgteYf)
+**Benchmarking:** [RustiNESs Benchmarking](https://kunkelalexander.github.io/rustiNESs/benchmark.html)
+**Struggles with audio:** [Real-time web audio demo](https://kunkelalexander.github.io/rustiNESs/audio_demo.html)
 
 <p align="center">
   <img src="figures/0.png" alt="Demo">
@@ -61,7 +63,7 @@ This Rust project was written by hand as a learning exercise. I mainly used LLMs
     - 8% is spent in the loop adding the harmonics
 - After some research, I decided that wavetables are the way to go - We precompute the waveforms at a given temporal resolution for different duty cycles
     - This requires more RAM (4096 * 4 * 4 bytes for f32 = 64 KB) but makes the wave sampling a simple array 
-- With the wavetable, performance is below 5 ms per frame again - I checked this in my browse using the following website Claude kindly provided ([benchmark.html](https://kunkelalexander.github.io/rustiNESs/benchmark.html))
+- With the wavetable, performance is below 5 ms per frame again - I checked this in my browse using [this tool] (https://kunkelalexander.github.io/rustiNESs/benchmark.html) Claude kindly provided
 
 
 ![](figures/35.png)
@@ -116,7 +118,7 @@ This Rust project was written by hand as a learning exercise. I mainly used LLMs
         - Whatever the PPU last rendered is drawn to the screen 
         - This is called synchronising to sound
 
-- Claude kindly provided [this tool](kunkelalexander.github.io/rustiNESs/audio_demo.html) which lets you explore the different approaches to some extent. Approach 4 is most closely reflected by approaches 4/5 in the tool. However, we are still stuck to an asynchronous architecture in the browser. A `SharedArrayBuffer` would make these approaches more similar to a native approach, but this requires cross-origin isolation with GitHub Pages disables by default. Enabling it would require an external script and a page reload which I do not want. So, I prefer living with imperfect audio for now. 
+- Claude kindly provided [this tool](https://kunkelalexander.github.io/rustiNESs/audio_demo.html) which lets you explore the different approaches to some extent. Approach 4 is most closely reflected by approaches 4/5 in the tool. However, we are still stuck to an asynchronous architecture in the browser. A `SharedArrayBuffer` would make these approaches more similar to a native approach, but this requires cross-origin isolation with GitHub Pages disables by default. Enabling it would require an external script and a page reload which I do not want. So, I prefer living with imperfect audio for now. 
 
 - Actually, I realised that the performance of the emulation itself is still a bottleneck. If frame generation takes too long, audio is necessarily going to lag behind
     - Debug: 28ms per frame
