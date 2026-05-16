@@ -7,3 +7,4 @@ src/main.rs
 output/
 roms/
 profile.json.gz
+.vscode/

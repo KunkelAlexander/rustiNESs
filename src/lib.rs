@@ -90,10 +90,10 @@ impl NES {
     }
 
     pub fn save_state(&self) -> Vec<u8> {
-        self.inner.save_state()
+        self.inner.save_state_binary()
     }
 
     pub fn load_state(&mut self, data: &[u8]) -> Result<(), String> {
-        self.inner.load_state(data)
+        self.inner.load_state_binary(data)
     }
 }

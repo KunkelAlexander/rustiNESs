@@ -8,7 +8,7 @@ It currently emulates the 6502 CPU, the PPU, the APU, controller input, DMA, and
 **Based on:** [javidx9's NES Emulator series](https://www.youtube.com/playlist?list=PLrOv9FMX8xJHqMvSGB_9G9nZZ_4IgteYf)
 
 <p align="center">
-  <img src="figures/2.gif" alt="Demo">
+  <img src="figures/0.png" alt="Demo">
 </p>
 
 ## Learning Approach
@@ -25,13 +25,24 @@ This Rust project was written by hand as a learning exercise. I mainly used LLMs
 - Controller input
 - Mapper 000 support
 - WebAssembly browser build
-- CPU validation using Harte tests (you need to download these manually from [here]([here](https://github.com/SingleStepTests/65x02/tree/main/nes6502)))
+- CPU validation using Harte tests (you need to download these manually from [here](https://github.com/SingleStepTests/65x02/tree/main/nes6502))
+- Quick save and reload. 
 
 ## Devlog
 
+### Day 16: 16.05.2025
+- Add emulator serialisation for quick save and load! This is really easy. We derive from `serde` for all classes that need serialisation and only need to worry about the class members that should not go into the binary file because they would bloat it. I decided to opt for a binary serialisation here, but I also implemented an interface for `serde_json` which is super nice for editing the save file in a text editor (cheats & debugging).
 
 ### Day 15: 09.05.2025
 - Noise now works to the point where SMB sounds nice !
+- But performance is still an issue because the emu runs on the main thread. Under usual circumstances, performance looks as follows: 
+
+![](figures/37.png)
+
+- WASM needs below 10 ms per frame and my laptop can ensure a stable 16 ms per frame
+- But when the OS starves the browser process because it does something else, everything stalls, despite good optimisation. This means I probably need to move the emulator to a web worker thread. 
+
+![](figures/38.png)
 
 ### Day 14: 09.05.2025
 
@@ -50,7 +61,7 @@ This Rust project was written by hand as a learning exercise. I mainly used LLMs
     - 8% is spent in the loop adding the harmonics
 - After some research, I decided that wavetables are the way to go - We precompute the waveforms at a given temporal resolution for different duty cycles
     - This requires more RAM (4096 * 4 * 4 bytes for f32 = 64 KB) but makes the wave sampling a simple array 
-- With the wavetable, performance is below 5 ms per frame again - I checked this in my browser using the WASM interface with a script Claude kindly provided ([benchmark.html](docs\benchmark.html))
+- With the wavetable, performance is below 5 ms per frame again - I checked this in my browse using the following website Claude kindly provided ([benchmark.html](https://kunkelalexander.github.io/rustiNESs/benchmark.html))
 
 
 ![](figures/35.png)
@@ -82,7 +93,7 @@ This Rust project was written by hand as a learning exercise. I mainly used LLMs
         - Audio worklet drains ring buffer independently
         - *Result*: If the emulation takes too long, I get terrible-sounding buffer underruns. Even for 6ms per emulation frame, I get some crackling. Audio is really a different beast. 
         
-    - **Approach 1.1**: 
+    - **Approach 2**: 
         - Frame loop fires every 1/60 = 16.7ms 
         - We check the current state of the ring buffer 
             - If there are too many samples, we skip a frame
@@ -91,13 +102,14 @@ This Rust project was written by hand as a learning exercise. I mainly used LLMs
         - Audio worklet drains ring buffer independently
         - *Result*: In general, this tends to work okay but is also not very robust. Sometimes, there are too many samples on the buffer when the audio system fails to empty it at start-up and the first seconds of the run are spent skipping frames to empty the buffer. 
 
-    - **Approach 2**: 
+    - **Approach 3**: 
         - Audio worklet fires every 1/44100 = 2.9ms
         - Reports buffer level back to main thread
         - Main thread checks buffer level
         - If buffer level is low, we run 2 frames of emulations and push 2x samples, 
         - If buffer level is high, we skip the emulation and push nothing 
-    - **Approch 3 - the gold standard and Javidx9's approach**:
+
+    - **Approch 4 - the gold standard and Javidx9's approach**:
         - Audio worklet fires every 1/44100 = 2.9s
         - Asks: How many samples do I need
         - The emulation runs long enough to produce those samples. This works because NES emulation is fast

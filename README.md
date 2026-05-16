@@ -8,7 +8,7 @@ It currently emulates the 6502 CPU, the PPU, the APU, controller input, DMA, and
 **Based on:** [javidx9's NES Emulator series](https://www.youtube.com/playlist?list=PLrOv9FMX8xJHqMvSGB_9G9nZZ_4IgteYf)
 
 <p align="center">
-  <img src="figures/2.gif" alt="Demo">
+  <img src="figures/0.png" alt="Demo">
 </p>
 
 ## Learning Approach
@@ -26,11 +26,12 @@ This Rust project was written by hand as a learning exercise. I mainly used LLMs
 - Mapper 000 support
 - WebAssembly browser build
 - CPU validation using Harte tests (you need to download these manually from [here](https://github.com/SingleStepTests/65x02/tree/main/nes6502))
+- Quick save and reload. 
 
 ## Devlog
 
 ### Day 16: 16.05.2025
-- Add emulator serialisation for quicksave! This is really easy. We derive from `serde` for all classes that need serialisation and only need to worry about the class members that should not go into the binary file because they would bloat it. I decided to opt for a binary serialisation here, but `serde_json` would be a nice choice too for editing the save file in a text editor (cheats & debugging). Maybe I will add both serialisation options! 
+- Add emulator serialisation for quick save and load! This is really easy. We derive from `serde` for all classes that need serialisation and only need to worry about the class members that should not go into the binary file because they would bloat it. I decided to opt for a binary serialisation here, but I also implemented an interface for `serde_json` which is super nice for editing the save file in a text editor (cheats & debugging).
 
 ### Day 15: 09.05.2025
 - Noise now works to the point where SMB sounds nice !
@@ -107,7 +108,7 @@ This Rust project was written by hand as a learning exercise. I mainly used LLMs
         - Main thread checks buffer level
         - If buffer level is low, we run 2 frames of emulations and push 2x samples, 
         - If buffer level is high, we skip the emulation and push nothing 
-        
+
     - **Approch 4 - the gold standard and Javidx9's approach**:
         - Audio worklet fires every 1/44100 = 2.9s
         - Asks: How many samples do I need

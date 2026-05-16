@@ -193,12 +193,21 @@ impl Nes {
     }
 
 
-    pub fn save_state(&self) -> Vec<u8> {
+    pub fn save_state_binary(&self) -> Vec<u8> {
         bincode::serialize(self).expect("save_state serialization failed")
     }
 
-    pub fn load_state(&mut self, data: &[u8]) -> Result<(), String> {
+    pub fn load_state_binary(&mut self, data: &[u8]) -> Result<(), String> {
         *self = bincode::deserialize(data).map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn save_state_json(&self) -> Vec<u8> {
+        serde_json::to_vec(self).expect("save_state_json serialization failed")
+    }
+
+    pub fn load_state_json(&mut self, data: &[u8]) -> Result<(), String> {
+        *self = serde_json::from_slice(data).map_err(|e| e.to_string())?;
         Ok(())
     }
 
