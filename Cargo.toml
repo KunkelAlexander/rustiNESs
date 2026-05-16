@@ -23,4 +23,4 @@ debug = true
 strip = false
 lto = false
 codegen-units = 1
-panic = "abort"
+#panic = "abort"

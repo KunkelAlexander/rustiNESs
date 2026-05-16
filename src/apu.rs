@@ -26,7 +26,7 @@ const TABLE_SIZE: usize = 4096; // temporal resolution
 const DUTY_CYCLES: [f64; 4] = [0.125, 0.25, 0.5, 0.75];
 
 pub struct WaveTable {
-    tables: [[f32; TABLE_SIZE]; 4],
+    tables: Vec<Vec<f32>>,
 }
 
 impl Default for WaveTable {
@@ -35,21 +35,20 @@ impl Default for WaveTable {
 
 impl WaveTable {
     pub fn new(harmonics: usize) -> Self {
-        // Compute everything in f64 to reduce rounding errors
         let pi = std::f64::consts::PI;
-        let mut tables = [[0.0; TABLE_SIZE]; 4];
+        let mut tables = vec![vec![0.0f32; TABLE_SIZE]; 4];
 
         for (duty_idx, &duty) in DUTY_CYCLES.iter().enumerate() {
             let p = duty * 2.0 * pi;
 
             for i in 0..TABLE_SIZE {
-                let t = i as f64 / TABLE_SIZE as f64;  // 0.0 .. 1.0, one full period
+                let t = i as f64 / TABLE_SIZE as f64;
                 let mut sum = 0.0;
 
                 for n in 1..harmonics {
                     let nf = n as f64;
                     let c  = nf * 2.0 * pi * t;
-                    sum += (f64::sin(c - p * nf) - f64::sin(c)) / nf; // We can use proper sin here since we precompute
+                    sum += (f64::sin(c - p * nf) - f64::sin(c)) / nf;
                 }
 
                 tables[duty_idx][i] = (sum * (2.0 / pi)) as f32;
@@ -445,13 +444,13 @@ impl Olc2A03 {
             //self.pulse1_sample = self.pulse1_sequence.clock(self.pulse1_enable) as f32; 
 
             self.pulse1_osc.frequency = 1789773. / (16. * ((self.pulse1_sequence.reload as f32) + 1.));
-            self.pulse1_osc.amplitude = ((self.pulse1_env.output - 1) as f32) / 16.0;
+            self.pulse1_osc.amplitude = (self.pulse1_env.output.wrapping_sub(1) as f32) / 16.0;
             self.pulse1_osc.advance(1789773.);
             self.pulse1_sample        = self.pulse1_osc.sample(self.global_time as f32, &self.wavetable); 
 
             
             self.pulse2_osc.frequency = 1789773. / (16. * ((self.pulse2_sequence.reload as f32) + 1.));
-            self.pulse2_osc.amplitude = ((self.pulse2_env.output - 1) as f32) / 16.0;
+            self.pulse2_osc.amplitude = (self.pulse2_env.output.wrapping_sub(1) as f32) / 16.0;
             self.pulse2_osc.advance(1789773.);
             self.pulse2_sample        = self.pulse2_osc.sample(self.global_time as f32, &self.wavetable); 
 

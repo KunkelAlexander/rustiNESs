@@ -61,26 +61,20 @@ impl Sprite {
     }
 }
 
-#[derive(Copy, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct SpriteArray<const N: usize> {
-    sprites: [Sprite; N],    
+    sprites: Vec<Sprite>,
 }
 
 impl<const N: usize> Default for SpriteArray<N> {
     fn default() -> Self {
         Self {
-            sprites: [Sprite::default(); N],
+            sprites: vec![Sprite::default(); N],
         }
     }
 }
 
 impl<const N: usize> SpriteArray<N> {
-    
-    fn default() -> Self {
-        Self {
-            sprites: [Sprite::default(); N],
-        }
-    }
 
     pub fn write(&mut self, addr: u8, data: u8) {
         let index = (addr / 4) as usize;
@@ -103,10 +97,11 @@ pub type SpriteScanline = SpriteArray<8>;
 #[derive(Serialize, Deserialize)]
 #[serde(bound = "")]
 pub struct Olc2c02<C: CartridgeInterface> {
-    screen:                [u8; SCREEN_H*SCREEN_W],   // Frame buffer
-    table_name:            [u8; 2*1024],              // 2 KB of physical VRAM for the name tables
+    #[serde(skip)]
+    screen:                Vec<u8>,   // Frame buffer
+    table_name:            Vec<u8>,                   // 2 KB of physical VRAM for the name tables
     table_palette:         [u8; 32],                  // 32 Bytes physical VRAM for the palletes
-    table_pattern:         [u8; 2*4096],              // 8 KB of physical VRAM for the patterns
+    table_pattern:         Vec<u8>,                   // 8 KB of physical VRAM for the patterns
     scanline:               u16, 
     cycle:                  u16, 
     pub frame_complete:     bool,
@@ -190,10 +185,10 @@ impl<C: CartridgeInterface> Olc2c02<C> {
 
     pub fn new() -> Self {
         Self {     
-            screen:                 [0x00; SCREEN_H * SCREEN_W],
-            table_name:             [0x00; 2*1024], 
+            screen:                 vec![0u8; SCREEN_H * SCREEN_W],
+            table_name:             vec![0u8; 2*1024],
             table_palette:          [0x00; 32],
-            table_pattern:          [0x00; 2*4096],    
+            table_pattern:          vec![0u8; 2*4096],
             scanline:                0, 
             cycle:                   0,
             frame_complete:          false,

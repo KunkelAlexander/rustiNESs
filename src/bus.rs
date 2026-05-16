@@ -2,16 +2,15 @@ use crate::interfaces::{CartridgeInterface, BusInterface, PpuInterface, ApuInter
 use crate::ppu::Olc2c02;
 use crate::apu::Olc2A03;
 use serde::{Serialize, Deserialize};
-
 // SimpleBus only containing 64 KB of RAM used in 6502 demo
 pub struct SimpleBus {
-    ram: [u8; 1024*64],
+    ram: Vec<u8>,
 }
 
 impl SimpleBus {
     pub fn new() -> Self {
         Self {
-            ram: [0; 1024 * 64],
+            ram: vec![0u8; 1024 * 64],
         }
     }
 
@@ -23,7 +22,7 @@ impl SimpleBus {
     }
 
     pub fn reset(&mut self) {
-        self.ram = [0u8; 1024*64];
+        self.ram.fill(0);
     }
 }
 
@@ -40,7 +39,7 @@ impl BusInterface for SimpleBus {
 // NES bus containing 2 KB of RAM
 #[derive(Serialize, Deserialize)]
 pub struct Bus<C: CartridgeInterface> {
-    cpu_ram:              [u8; 2048],
+    cpu_ram:              Vec<u8>,
     pub ppu:              Olc2c02<C>,
     pub apu:              Olc2A03,
     pub cartridge:        C,
@@ -59,7 +58,7 @@ pub struct Bus<C: CartridgeInterface> {
 impl<C: CartridgeInterface> Bus<C> {
     pub fn new(cartridge: C) -> Self {
         Self {
-            cpu_ram:             [0; 2048],
+            cpu_ram:             vec![0u8; 2048],
             ppu:                 Olc2c02::new(),
             apu:                 Olc2A03::new(),
             cartridge:           cartridge,

@@ -22,7 +22,7 @@ pub struct Nes {
     cpu_divider: u8,
     audio_acc: u32,
     #[serde(skip)]
-    audio_buffer: [f32; AUDIO_BUFFER_SIZE],
+    audio_buffer: Vec<f32>,
     #[serde(skip)]
     audio_buffer_len: usize,
 }
@@ -36,7 +36,7 @@ impl Nes {
             system_clock_counter:   0,
             cpu_divider:            0,
             audio_acc:              0,
-            audio_buffer:           [0.0; AUDIO_BUFFER_SIZE],
+            audio_buffer:           vec![0.0f32; AUDIO_BUFFER_SIZE],
             audio_buffer_len:       0,
         }
     }
