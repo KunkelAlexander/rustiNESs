@@ -4,6 +4,8 @@ use crate::bus::Bus;
 use crate::cpu::Olc6502;
 use crate::ppu::Olc2c02;
 use crate::cartridge::Cartridge;
+use serde::{Serialize, Deserialize};
+use bincode;
 
 
 
@@ -12,15 +14,17 @@ const SYSTEM_CLOCK_RATE: u32 = 5_369_319;
 const AUDIO_SAMPLE_RATE: u32 = 44_100;
 const AUDIO_BUFFER_SIZE: usize = 1024; // enough for one frame (~735 samples)
 
+#[derive(Serialize, Deserialize)]
 pub struct Nes {
     cpu: Olc6502<Bus<Cartridge>>,
     bus: Bus<Cartridge>,
     system_clock_counter: u32,
     cpu_divider: u8,
-    audio_acc: u32,    // integer audio timing
+    audio_acc: u32,
+    #[serde(skip)]
     audio_buffer: [f32; AUDIO_BUFFER_SIZE],
+    #[serde(skip)]
     audio_buffer_len: usize,
-    sine_phase:   f32,
 }
 
 
@@ -34,7 +38,6 @@ impl Nes {
             audio_acc:              0,
             audio_buffer:           [0.0; AUDIO_BUFFER_SIZE],
             audio_buffer_len:       0,
-            sine_phase:             0.0,
         }
     }
 
@@ -189,6 +192,15 @@ impl Nes {
         self.bus.get_ram(start, len)
     }
 
+
+    pub fn save_state(&self) -> Vec<u8> {
+        bincode::serialize(self).expect("save_state serialization failed")
+    }
+
+    pub fn load_state(&mut self, data: &[u8]) -> Result<(), String> {
+        *self = bincode::deserialize(data).map_err(|e| e.to_string())?;
+        Ok(())
+    }
 
     pub fn get_pattern_table(&self, table: u8, palette: u8) -> Vec<u8> {
         self.bus.get_pattern_table(table, palette)

@@ -1,9 +1,11 @@
 use crate::interfaces::{CartridgeInterface, MapperInterface};
 use crate::mapper::{Mapper, Mapper000};
+use serde::{Serialize, Deserialize};
 
 // Documentation on cartridge formats
 // https://nescartdb.com/
 
+#[derive(Serialize, Deserialize)]
 enum MIRROR
 {
     Horizontal,
@@ -23,6 +25,7 @@ struct INesHeader {
     //tv_system2     : u8
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Cartridge {
     v_prg_memory: Vec<u8>,
     v_chr_memory: Vec<u8>,

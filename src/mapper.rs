@@ -1,5 +1,7 @@
 use crate::interfaces::{MapperInterface};
+use serde::{Serialize, Deserialize};
 
+#[derive(Serialize, Deserialize)]
 pub enum Mapper {
     Mapper000(Mapper000),
 }
@@ -22,6 +24,7 @@ impl MapperInterface for Mapper {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Mapper000 {
     pub prg_banks: u8,
     pub chr_banks: u8,

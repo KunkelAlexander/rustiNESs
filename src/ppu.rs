@@ -1,6 +1,7 @@
 use crate::{interfaces::{CartridgeInterface, PpuInterface}};
 
 use std::marker::PhantomData;
+use serde::{Serialize, Deserialize};
 
 pub const SCREEN_W: usize = 256;
 pub const SCREEN_H: usize = 240;
@@ -8,7 +9,7 @@ pub const SCREEN_H: usize = 240;
 
 // Javidx9 goes via bitfields here but the bit gymnastics in Rust are bit too much for me
 // The following is much nicer than operating on a single u8 in Rust 
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone, Default, Serialize, Deserialize)]
 struct Loopy {
     addr: u16,
 }
@@ -30,7 +31,7 @@ impl Loopy {
     fn from_u16(v: u16) -> Self { Loopy {addr: v} }          // was 5 stores
 }
 
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone, Default, Serialize, Deserialize)]
 struct Sprite {
     x:         u8, 
     y:         u8,
@@ -60,7 +61,7 @@ impl Sprite {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Serialize, Deserialize)]
 pub struct SpriteArray<const N: usize> {
     sprites: [Sprite; N],    
 }
@@ -99,6 +100,8 @@ impl<const N: usize> SpriteArray<N> {
 pub type OAM = SpriteArray<64>;
 pub type SpriteScanline = SpriteArray<8>; 
 
+#[derive(Serialize, Deserialize)]
+#[serde(bound = "")]
 pub struct Olc2c02<C: CartridgeInterface> {
     screen:                [u8; SCREEN_H*SCREEN_W],   // Frame buffer
     table_name:            [u8; 2*1024],              // 2 KB of physical VRAM for the name tables
@@ -150,7 +153,8 @@ pub struct Olc2c02<C: CartridgeInterface> {
     b_sp_0_hit_possible:   bool,
 
     
-    _cartridge: PhantomData<C>, 
+    #[serde(skip)]
+    _cartridge: PhantomData<C>,
 }
 
 

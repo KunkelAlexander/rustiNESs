@@ -1,6 +1,7 @@
 use crate::interfaces::BusInterface;
 
 use std::marker::PhantomData;
+use serde::{Serialize, Deserialize};
 
 // Note that https://www.nesdev.org/wiki/Instruction_reference refers to the U bit as 1 
 // when they write something like the bit order is NV1BDIZC (high to low). 
@@ -17,7 +18,7 @@ pub const FLAG6502_N: u8 = 1 << 7; // Negative
 // I think it would be nicer to store integers in the instruction table and compare these
 // The actual lookup is then done using a match instruction
 // This enum defines the address modes
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AddressMode {
     IMP,
     IMM,
@@ -58,7 +59,7 @@ impl AddressMode {
 // I think it would be nicer to store integers in the instruction table and compare these
 // The actual lookup is then done using a match instruction
 // This enum defines the operations to completely get rid of storing function pointers 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Operation {
     // System
     BRK,
@@ -345,6 +346,8 @@ const fn build_lookup() -> [Instruction; 256] {
 
 pub static LOOKUP: [Instruction; 256] = build_lookup();
 
+#[derive(Serialize, Deserialize)]
+#[serde(bound = "")]
 pub struct Olc6502<C: BusInterface> {    // registers
     a      : u8,  // Accumulator register
     x      : u8,  // X register
@@ -367,7 +370,8 @@ pub struct Olc6502<C: BusInterface> {    // registers
     // PhantomData is a way to tell the compiler "this type parameter is logically used here, 
     // even though no field actually stores it.
     // We need it for the generic to compile
-    _bus: PhantomData<C>, 
+    #[serde(skip)]
+    _bus: PhantomData<C>,
 }
 
 

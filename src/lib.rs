@@ -88,4 +88,12 @@ impl NES {
     pub fn audio_len(&self) -> usize {
         self.inner.audio_len()
     }
+
+    pub fn save_state(&self) -> Vec<u8> {
+        self.inner.save_state()
+    }
+
+    pub fn load_state(&mut self, data: &[u8]) -> Result<(), String> {
+        self.inner.load_state(data)
+    }
 }

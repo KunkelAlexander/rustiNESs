@@ -1,4 +1,7 @@
 use crate::{interfaces::{ApuInterface}};
+use serde::{Serialize, Deserialize};
+
+#[derive(Serialize, Deserialize)]
 pub struct OscillatorPulse {
     frequency:   f32, 
     duty_cycle:  f32, 
@@ -26,6 +29,9 @@ pub struct WaveTable {
     tables: [[f32; TABLE_SIZE]; 4],
 }
 
+impl Default for WaveTable {
+    fn default() -> Self { WaveTable::new(20) }
+}
 
 impl WaveTable {
     pub fn new(harmonics: usize) -> Self {
@@ -108,6 +114,7 @@ impl OscillatorPulse {
 
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Envelope {
     start:         bool,
     disable:       bool,
@@ -154,6 +161,7 @@ impl Envelope {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct LengthCounter {
     counter: u8,
 }
@@ -181,12 +189,13 @@ const LENGTH_TABLE: [u8; 32] = [
 ];
 
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
 pub enum SequencerKind {
     Pulse,
     Triangle,
     Noise,
 }
+#[derive(Serialize, Deserialize)]
 pub struct Sequencer {
     kind:     SequencerKind,
     sequence: u32,
@@ -238,6 +247,7 @@ impl Sequencer {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Sweeper {
     enabled: bool,
     down:    bool,
@@ -297,6 +307,7 @@ impl Sweeper {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Olc2A03 {
     // Pulse 1 
     pulse1_enable:       bool,
@@ -331,6 +342,7 @@ pub struct Olc2A03 {
     noise_lc:            LengthCounter,
     noise_visual:        u16,
 
+    #[serde(skip)]
     wavetable:           WaveTable,
     clock_divider:       u8,
     frame_clock_counter: u32,
