@@ -25,13 +25,23 @@ This Rust project was written by hand as a learning exercise. I mainly used LLMs
 - Controller input
 - Mapper 000 support
 - WebAssembly browser build
-- CPU validation using Harte tests (you need to download these manually from [here]([here](https://github.com/SingleStepTests/65x02/tree/main/nes6502)))
+- CPU validation using Harte tests (you need to download these manually from [here](https://github.com/SingleStepTests/65x02/tree/main/nes6502))
 
 ## Devlog
 
+### Day 16: 16.05.2025
+- Add emulator serialisation for quicksave! 
 
 ### Day 15: 09.05.2025
 - Noise now works to the point where SMB sounds nice !
+- But performance is still an issue because the emu runs on the main thread. Under usual circumstances, performance looks as follows: 
+
+![](figures/37.png)
+
+- WASM needs below 10 ms per frame and my laptop can ensure a stable 16 ms per frame
+- But when the OS starves the browser process because it does something else, everything stalls, despite good optimisation. This means I probably need to move the emulator to a web worker thread. 
+
+![](figures/38.png)
 
 ### Day 14: 09.05.2025
 
@@ -50,7 +60,7 @@ This Rust project was written by hand as a learning exercise. I mainly used LLMs
     - 8% is spent in the loop adding the harmonics
 - After some research, I decided that wavetables are the way to go - We precompute the waveforms at a given temporal resolution for different duty cycles
     - This requires more RAM (4096 * 4 * 4 bytes for f32 = 64 KB) but makes the wave sampling a simple array 
-- With the wavetable, performance is below 5 ms per frame again - I checked this in my browser using the WASM interface with a script Claude kindly provided ([benchmark.html](docs\benchmark.html))
+- With the wavetable, performance is below 5 ms per frame again - I checked this in my browse using the following website Claude kindly provided ([benchmark.html](https://kunkelalexander.github.io/rustiNESs/benchmark.html))
 
 
 ![](figures/35.png)

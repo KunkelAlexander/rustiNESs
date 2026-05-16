@@ -25,6 +25,13 @@ let fps_lastTime  = 0;
 let fps_frames    = 0;
 let fps_display   = 0;
 
+// Performance breakdown overlay (EMA-smoothed, fullscreen only)
+const PERF_ALPHA  = 0.15;
+let perf_wasm     = 0;   // ms per run_frame() call
+let perf_render   = 0;   // ms for renderFullscreenFrame()
+let perf_gap      = 0;   // ms between consecutive rendered frames (scheduler jitter)
+let perf_prevTs   = 0;   // RAF timestamp of last rendered frame
+
 // "nes" | "cpu" | "fullscreen"
 let mode       = "nes";
 // Mode we came from before entering fullscreen
@@ -359,7 +366,9 @@ function pump() {
   // catch-up after a tab-throttle gap.
   let safety = 8;
   while (audioBufferLevel < TARGET_FILL_SAMPLES && safety-- > 0 && running) {
+    const t_wasm = performance.now();
     emu.run_frame();
+    perf_wasm = perf_wasm * (1 - PERF_ALPHA) + (performance.now() - t_wasm) * PERF_ALPHA;
     const len = emu.audio_len();
     if (len === 0) break;
 
@@ -437,7 +446,12 @@ function frame(timestamp) {
       const b = performance.now();
       renderFullscreenFrame();
       tRender = performance.now() - b;
-      
+
+      perf_render = perf_render * (1 - PERF_ALPHA) + tRender * PERF_ALPHA;
+      if (perf_prevTs > 0)
+        perf_gap = perf_gap * (1 - PERF_ALPHA) + (timestamp - perf_prevTs) * PERF_ALPHA;
+      perf_prevTs = timestamp;
+
       // FPS counter — update display value once per second
       fps_frames++;
       const fps_now = performance.now();
@@ -452,10 +466,19 @@ function frame(timestamp) {
       fsCtx.textBaseline = "top";
       fsCtx.fillStyle    = "rgba(0,0,0,0.55)";
       fsCtx.fillRect(2, 2, 38, 14);
-      fsCtx.fillStyle    = fps_display >= 58 ? "#36d399"   // green  — smooth
-                        : fps_display >= 45 ? "#f5a623"   // amber  — mild drop
-                        :                     "#ff5c7c";  // red    — struggling
+      fsCtx.fillStyle    = "#ffffff";
       fsCtx.fillText(`${fps_display} FPS`, 5, 4);
+
+      // Performance breakdown — bottom-right corner, all white
+      const boxW = 99, boxH = 46;
+      const boxX = 256 - boxW - 2, boxY = 240 - boxH - 2;
+      fsCtx.fillStyle = "rgba(0,0,0,0.55)";
+      fsCtx.fillRect(boxX, boxY, boxW, boxH);
+      fsCtx.fillStyle = "#ffffff";
+      const tx = boxX + 4;
+      fsCtx.fillText(`wasm:   ${perf_wasm.toFixed(1)} ms`,   tx, boxY + 4);
+      fsCtx.fillText(`render: ${perf_render.toFixed(1)} ms`, tx, boxY + 17);
+      fsCtx.fillText(`gap:    ${perf_gap.toFixed(1)} ms`,    tx, boxY + 30);
     }
   } catch (e) {
     running = false;
@@ -463,15 +486,7 @@ function frame(timestamp) {
     log(`ERROR: ${e}`);
     return;
   }
-  
-  //const total = performance.now() - t0;
-  //if (total > 20) {
-  //  console.warn(
-  //    `Slow frame: total=${total.toFixed(1)}ms ` +
-  //    `wasm=${tWasm.toFixed(1)} render=${tRender.toFixed(1)} ui=${tUI.toFixed(1)} ` +
-  //    `mode=${mode}`
-  //  );
-  //}
+
   
   rafHandle = requestAnimationFrame(frame);
 }
