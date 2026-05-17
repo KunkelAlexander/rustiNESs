@@ -272,7 +272,7 @@ button.primary { background: var(--accent); color: white; border: none; }
   display: flex; flex-direction: column; gap: 12px; align-items: flex-start;
 }
 .rom-btns {
-  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center; width: 100%;
 }
 
 #screen {
