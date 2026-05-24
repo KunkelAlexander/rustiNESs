@@ -36,7 +36,8 @@ The following tools were also written by Claude:
 - Mapper 163 is a small custom board
     - 32 KB PRG-ROM - it can address up to 32 x 32 KB banks and Pokemon is about 1 MB of PRG-ROM - very large
     - 8 KB battery-backed PRG-RANM for savestates
-    - Weird piracy protectionand i
+    - Weird piracy protection
+    
 ### Day 16: 16.05.2025
 - Add emulator serialisation for quick save and load! This is really easy given the code structure. We derive from `serde` for all classes that need serialisation and only need to worry about the class members that should not go into the binary file because they would bloat it. I decided to opt for a binary serialisation here, but I also implemented an interface for `serde_json` which is super nice for editing the save file in a text editor (cheats & debugging).
 - The only issue I stumbled upon: I had only used stack memory so far, but when loading the serialised classes, I got a stack overflow! On top of that `serde` really does not like large arrays - you need `serde-large` to serialise them. Therefore, I decided to turn all largers arrays with more than 8 elements into vectors with memory on the heap. May the memory management gods forgive me. 
