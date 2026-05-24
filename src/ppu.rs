@@ -443,16 +443,10 @@ impl<C: CartridgeInterface> Olc2c02<C> {
     }
 
     fn evaluate_sprites(&mut self) {
-        // Clear sprite scanline array
-        self.sprite_scanline = SpriteScanline::default();
-
         self.sprite_count = 0;
-
-
-		for i in 0..8 {
-			self.sp_shifter_pattern_lo[i] = 0;
-			self.sp_shifter_pattern_hi[i] = 0;
-		}
+        self.sprite_scanline.sprites.fill(Sprite::default());
+        self.sp_shifter_pattern_lo.fill(0);
+        self.sp_shifter_pattern_hi.fill(0);
 
         self.status &= !STATUS_SPRITE_OVERFLOW;
 
@@ -739,7 +733,7 @@ impl<C: CartridgeInterface> Olc2c02<C> {
         self.bg_next_tile_attrib    = 0x00;
         self.oam                    = OAM::default();
         self.oam_addr               = 0x00;
-        self.sprite_scanline        = SpriteScanline::default();
+        self.sprite_scanline.sprites.fill(Sprite::default());
         self.sprite_count           = 0x00;
         self.sp_shifter_pattern_hi  = [0x00; 8];
         self.sp_shifter_pattern_lo  = [0x00; 8];
@@ -847,7 +841,7 @@ impl<C: CartridgeInterface> PpuInterface<C> for Olc2c02<C> {
         };
     }
 
-    fn read_ppu(&self, addr: u16, cartridge: &C) -> Option<u8> {
+    fn read_ppu(&mut self, addr: u16, cartridge: &mut C) -> Option<u8> {
         let mut addr = addr & 0x3FFF;
 
 
@@ -918,7 +912,7 @@ impl<C: CartridgeInterface> Olc2c02<C> {
         self.table_name[..1024].to_vec()
     }
 
-    pub fn get_pattern_table(&self, i: u8, palette: u8, cartridge: &C) -> Vec<u8> {
+    pub fn get_pattern_table(&mut self, i: u8, palette: u8, cartridge: &mut C) -> Vec<u8> {
         
         let mut sprite_pattern_table = [0u8; 128*128];
 

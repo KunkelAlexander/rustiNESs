@@ -1,5 +1,5 @@
 use crate::interfaces::{CartridgeInterface, MapperInterface};
-use crate::mapper::{Mapper, Mapper000};
+use crate::mapper::{Mapper, Mapper000, Mapper163};
 use serde::{Serialize, Deserialize};
 
 // Documentation on cartridge formats
@@ -29,8 +29,9 @@ struct INesHeader {
 pub struct Cartridge {
     v_prg_memory: Vec<u8>,
     v_chr_memory: Vec<u8>,
+    v_prg_ram:    Vec<u8>,                    // RAM for save states required by mapper 163
     //n_mapper_id:  u8,                       // which mapper are we using?
-    //n_prg_banks:  u8,                       // how many banks of prg memory? 
+    //n_prg_banks:  u8,                       // how many banks of prg memory?
     //n_chr_banks:  u8,                       // how many banks of chr memory?
     mirror:       MIRROR,
     mapper:       Mapper, // Reference to mapper
@@ -42,10 +43,11 @@ impl Cartridge {
         Self {
             v_prg_memory: vec![0; 16384],  // 1 bank of PRG ROM
             v_chr_memory: vec![0; 8192],   // 1 bank of CHR ROM
+            v_prg_ram:    Vec::new(),      // Initialise empty array - only populate for mapper 163
             mirror:       MIRROR::Horizontal,
-            mapper:       Mapper::Mapper000(Mapper000 { 
-                prg_banks: 1, 
-                chr_banks: 1 
+            mapper:       Mapper::Mapper000(Mapper000 {
+                prg_banks: 1,
+                chr_banks: 1
             }),
         }
     }
@@ -113,16 +115,27 @@ impl Cartridge {
 
 		// Load appropriate mapper
 		let mapper = match n_mapper_id {
-            0 => Mapper::Mapper000(Mapper000 { 
-                prg_banks: header.prg_rom_chunks, 
-                chr_banks: header.chr_rom_chunks 
+            0   => Mapper::Mapper000(Mapper000 {
+                prg_banks: header.prg_rom_chunks,
+                chr_banks: header.chr_rom_chunks
             }),
+            163 => Mapper::Mapper163(Mapper163::new(
+                header.prg_rom_chunks,
+                header.chr_rom_chunks
+            )),
             _ => return Err("Unsupported mapper".into()),
         };
+
+        // Additional memory for savestate for mapper 163
+        let mut v_prg_ram = Vec::new();
+        if n_mapper_id == 163 {
+            v_prg_ram = vec![0u8; 8192];
+        }
 
         Ok(Self {
             v_prg_memory: prg_memory,
             v_chr_memory: chr_memory,
+            v_prg_ram,
             //n_mapper_id:  n_mapper_id,
             //n_prg_banks:  header.prg_rom_chunks,
             //n_chr_banks:  header.chr_rom_chunks,
@@ -138,12 +151,20 @@ impl Cartridge {
 // map captures the Option returned by read and write functions as mapped_addr, returns it if it is None, else it applies it to the Lambda function
 impl CartridgeInterface for Cartridge {
     fn read_cpu(&mut self, addr: u16) -> Option<u8> {
+        if addr >= 0x6000 && addr <= 0x7FFF && !self.v_prg_ram.is_empty() {
+            return Some(self.v_prg_ram[(addr & 0x1FFF) as usize]);
+        }
+        if let Some(data) = self.mapper.cpu_read(addr) {return Some(data);}
         self.mapper.cpu_map_read( addr      ).map(|mapped_addr|  self.v_prg_memory[mapped_addr])
     }
     fn write_cpu(&mut self, addr: u16, data: u8) -> Option<()> {
+        if addr >= 0x6000 && addr <= 0x7FFF && !self.v_prg_ram.is_empty(){
+            self.v_prg_ram[(addr & 0x1FFF) as usize] = data;
+            return Some(());
+        }
         self.mapper.cpu_map_write(addr, data).map(|mapped_addr| {self.v_prg_memory[mapped_addr] = data;})
     }
-    fn read_ppu(&    self, addr: u16) -> Option<u8> {
+    fn read_ppu(&mut self, addr: u16) -> Option<u8> {
         self.mapper.ppu_map_read( addr      ).map(|mapped_addr|  self.v_chr_memory[mapped_addr])
     }
     fn write_ppu(&mut self, addr: u16, data: u8) -> Option<()> {

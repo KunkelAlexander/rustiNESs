@@ -81,8 +81,8 @@ impl<C: CartridgeInterface> Bus<C> {
     }
 
     
-    pub fn get_pattern_table(&self, i: u8, palette: u8) -> Vec<u8> {
-        self.ppu.get_pattern_table(i, palette, &self.cartridge)
+    pub fn get_pattern_table(&mut self, i: u8, palette: u8) -> Vec<u8> {
+        self.ppu.get_pattern_table(i, palette, &mut self.cartridge)
     }
 
     pub fn get_name_table(&self) -> Vec<u8> {

@@ -2,7 +2,7 @@
 
 A Nintendo Entertainment System (NES) emulator written in Rust, built for learning, experimentation, and clean architecture.
 
-It currently emulates the 6502 CPU, the PPU, the APU, controller input, DMA, and Mapper 000, and can already run games like **Donkey Kong** and **Super Mario Bros.** It is based on [javidx9's NES Emulator series](https://www.youtube.com/playlist?list=PLrOv9FMX8xJHqMvSGB_9G9nZZ_4IgteYf).
+It currently emulates the 6502 CPU, the PPU, the APU, controller input, DMA, and Mapper 000 & 163, and can already run games like **Donkey Kong**, **Super Mario Bros.** ... and **Pokemon Yellow**. It is based on [javidx9's NES Emulator series](https://www.youtube.com/playlist?list=PLrOv9FMX8xJHqMvSGB_9G9nZZ_4IgteYf).
 
 **Play it in the browser:** [RustiNESs Web](https://kunkelalexander.github.io/rustiNESs/) 
 
@@ -24,15 +24,22 @@ The following tools were also written by Claude:
 - APU (pulse 1, pulse 2, noise)
 - DMA transfers to OAM
 - Controller input
-- Mapper 000 support
+- Mapper 000 & 163 support
 - WebAssembly browser build
 - CPU validation using Harte tests (you need to download these manually from [here](https://github.com/SingleStepTests/65x02/tree/main/nes6502))
 - Quick save and reload. 
 
 ## Devlog
 
+### Day 17: 24.05.2025
+- Add mapper 163 for 雷电皇 比卡丘传说  - an inofficial Pokemon Yellow game for NES using the wonderful [nesdev documentation](https://www.nesdev.org/wiki/INES_Mapper_163) with a bit of LLM help. Check it out (here)[https://www.youtube.com/watch?v=WJmAl2DNvU8]. 
+- Mapper 163 is a small custom board
+    - 32 KB PRG-ROM - it can address up to 32 x 32 KB banks and Pokemon is about 1 MB of PRG-ROM - very large
+    - 8 KB battery-backed PRG-RANM for savestates
+    - Weird piracy protectionand i
 ### Day 16: 16.05.2025
-- Add emulator serialisation for quick save and load! This is really easy. We derive from `serde` for all classes that need serialisation and only need to worry about the class members that should not go into the binary file because they would bloat it. I decided to opt for a binary serialisation here, but I also implemented an interface for `serde_json` which is super nice for editing the save file in a text editor (cheats & debugging).
+- Add emulator serialisation for quick save and load! This is really easy given the code structure. We derive from `serde` for all classes that need serialisation and only need to worry about the class members that should not go into the binary file because they would bloat it. I decided to opt for a binary serialisation here, but I also implemented an interface for `serde_json` which is super nice for editing the save file in a text editor (cheats & debugging).
+- The only issue I stumbled upon: I had only used stack memory so far, but when loading the serialised classes, I got a stack overflow! On top of that `serde` really does not like large arrays - you need `serde-large` to serialise them. Therefore, I decided to turn all largers arrays with more than 8 elements into vectors with memory on the heap. May the memory management gods forgive me. 
 
 ### Day 15: 09.05.2025
 - Noise now works to the point where SMB sounds nice !
@@ -384,6 +391,47 @@ classDiagram
     CartridgeInterface <|.. Cartridge
     MapperInterface <|.. Mapper000
 ```
+
+Core Issue: 89,342 clock() calls per frame
+341 cycles × 262 scanlines means clock() is invoked ~89K times per frame. Each invocation pays for:
+
+At least 8 branch evaluations (if render_scanline && ...) that are nearly always identical within a region
+The fetch_background_tile → update_shifters call chain, which does one pixel of work per call through multiple indirections
+Cache pressure from touching self (a large struct on the heap) 89K times
+On a modern CPU, branch misprediction alone on those 8 guards is enough to account for most of the 5ms.
+
+Hidden Allocation Bug
+Every visible scanline calls this (ppu.rs:~543):
+
+
+self.sprite_scanline = SpriteScanline::default();
+SpriteScanline is SpriteArray<8>, whose Default implementation does vec![Sprite::default(); 8]. That is 240 heap allocations and 240 drops per frame, or ~14,400 per second. This is a real cost that shows up as allocator pressure, not as PPU logic time.
+
+Fix: change Vec<Sprite> inside SpriteArray to [Sprite; N] — sprites are small and N is a const, so a fixed-size array works perfectly:
+
+
+pub struct SpriteArray<const N: usize> {
+    sprites: [Sprite; N],   // was Vec<Sprite>
+}
+impl<const N: usize> Default for SpriteArray<N> {
+    fn default() -> Self { Self { sprites: [Sprite::default(); N] } }
+}
+Alternatives to Scanline Rendering
+Scanline rendering ("line by line") is not the only approach. Ranked by impact:
+
+1. Tile-strip precomputation — instead of using the hardware-accurate shifter one bit at a time, compute all 8 pixels of a tile row in one shot. For each tile you read 2 bytes (lo/hi pattern plane), then expand them into 8 pixels with bitwise ops. This removes the shifter entirely and does O(tiles) work instead of O(pixels). This is roughly equivalent to scanline rendering in effect, but lets you avoid restructuring the outer loop.
+
+2. Lazy / dirty-tile rendering — cache pre-decoded tiles and only re-render a tile when its CHR data, palette entry, or attribute byte changes. In most games the vast majority of tiles are static frame-to-frame. This is O(changed tiles) per frame rather than O(all pixels), and can be orders of magnitude faster for static screens.
+
+3. Direct CHR access — read_ppu() currently goes through cartridge.read_ppu() first, then falls through 4–5 branch conditions on every call. For CHR reads during rendering you always know the address is in 0x0000–0x1FFF. A dedicated read_chr(addr) that goes straight to the pattern table array (or a cartridge-provided CHR slice) eliminates those branches and the trait indirection on the hottest path.
+
+Summary
+Change	Effort	Impact
+Fix Vec → array in SpriteArray	Low	Removes 14K allocs/sec
+Direct CHR read in tile fetch	Low	Removes branch chain per pixel
+Tile-strip computation (drop shifter)	Medium	~10× fewer ops per pixel
+Dirty-tile caching	High	Near-zero work for static frames
+The allocation fix is a pure bug — worth doing immediately regardless. The real architectural win comes from ditching the per-cycle shifter model, whether you do that via scanline batching or tile precomputation.
 
 ### Day 5: 23.02.2026
 - Watch [NES Emulator Part #3: Buses, RAMs, ROMs & Mappers](https://www.youtube.com/watch?v=xdzOvpYPmGE)

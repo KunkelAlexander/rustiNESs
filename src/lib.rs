@@ -71,7 +71,7 @@ impl NES {
         self.inner.get_ram(start, len)
     }
 
-    pub fn get_pattern_table(&self, table: u8, palette: u8) -> Vec<u8> {
+    pub fn get_pattern_table(&mut self, table: u8, palette: u8) -> Vec<u8> {
         self.inner.get_pattern_table(table, palette)
     }
 
